@@ -16,18 +16,16 @@ export const authService = {
       throw new Error('An account with this email already exists. Please login to your account, or contact support if you do not have an account!')
     }
 
-    const hashedPassword = crypto
-      .createHash('sha256')
-      .update(data.password)
-      .digest('hex');
-      
+    // TODO: Hash password with bcrypt for production and store in database
+    // Currently password storage is not implemented in the schema
+
     // create user
     const user = await prisma.user.create({
       data: {
         email: data.email,
         name: data.name,
-        // TODO: add password
-        // password: data.password
+        // TODO: add password field to schema and store hashed password
+        // password: hashedPassword
       }
     });
 

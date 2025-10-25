@@ -9,7 +9,7 @@ export interface CreateSnapshotDTO {
 export const snapshotService = {
     // create new snapshot for a platform
 
-    async createSnapshot(userId: string, data: CreateSnapshotDTO) {
+    async createSnapshot(_userId: string, data: CreateSnapshotDTO) {
         const companyPlatform = await prisma.companyPlatform.findUnique({
             where: {id: data.companyPlatformId},
             include:{

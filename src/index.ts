@@ -18,7 +18,7 @@ app.use('/api/snapshots', snapshotRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/competitors', competitorRoutes);
 
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     message: 'Vantura API',
     version: '1.0.0',
@@ -34,7 +34,7 @@ app.get('/', (req, res) => {
 });
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
