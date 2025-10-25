@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  // password  String
+  companyId String?   // User's company (optional - user might not have company yet)
+  role      String    @default("member") // "owner", "admin", "member"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  authTokens AuthToken[]
+  company    Company?    @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([companyId])
+  @@map("users")
+}
+
+model AuthToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("auth_tokens")
+}
+
+// ============================================
+// COMPANY
+// ============================================
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  industry    String?
+  description String?  @db.Text
+  values      String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users             User[]
+  platforms         CompanyPlatform[]
+  posts             Post[]
+  relationships     CompanyRelationship[] @relation("CompanyA")
+  relatedTo         CompanyRelationship[] @relation("CompanyB")
+  platformSnapshots PlatformSnapshot[]
+
+  @@map("companies")
+}
+
+model CompanyRelationship {
+  id               String   @id @default(cuid())
+  companyAId       String
+  companyBId       String
+  relationshipType String   // "competitor", "partner", etc.
+  createdAt        DateTime @default(now())
+
+  // Relations
+  companyA Company @relation("CompanyA", fields: [companyAId], references: [id], onDelete: Cascade)
+  companyB Company @relation("CompanyB", fields: [companyBId], references: [id], onDelete: Cascade)
+
+  @@unique([companyAId, companyBId])
+  @@index([companyAId])
+  @@index([companyBId])
+  @@map("company_relationships")
+}
+
+// ============================================
+// PLATFORMS
+// ============================================
+
+model Platform {
+  id   String @id @default(cuid())
+  name String @unique
+
+  // Relations
+  companyPlatforms CompanyPlatform[]
+  posts            Post[]
+
+  @@map("platforms")
+}
+
+model CompanyPlatform {
+  id         String   @id @default(cuid())
+  companyId  String
+  platformId String
+  profileUrl String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  company   Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  platform  Platform           @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  snapshots PlatformSnapshot[]
+
+  @@unique([companyId, platformId])
+  @@index([companyId])
+  @@index([platformId])
+  @@map("company_platforms")
+}
+
+model PlatformSnapshot {
+  id            String   @id @default(cuid())
+  companyId     String
+  platformId    String
+  capturedAt    DateTime @default(now())
+  followerCount Int
+  postCount     Int
+
+  // Relations
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyPlatform CompanyPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, platformId, capturedAt])
+  @@map("platform_snapshots")
+}
+
+// ============================================
+// POSTS & METRICS
+// ============================================
+
+model Post {
+  id             String   @id @default(cuid())
+  companyId      String
+  platformId     String
+  platformPostId String   // External ID from the platform
+  captionText    String?  @db.Text
+  postUrl        String
+  mediaType      String   // "image", "video", "carousel", "reel"
+  postedAt       DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  platform         Platform       @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  metricsSnapshots PostSnapshot[]
+  analysis         PostAnalysis?
+
+  @@unique([platformId, platformPostId])
+  @@index([companyId])
+  @@index([platformId])
+  @@index([postedAt])
+  @@map("posts")
+}
+
+model PostSnapshot {
+  id           String   @id @default(cuid())
+  postId       String
+  capturedAt   DateTime @default(now())
+  likeCount    Int      @default(0)
+  commentCount Int      @default(0)
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, capturedAt])
+  @@map("post_snapshots")
+}
+
+// ============================================
+// AI ANALYSIS
+// ============================================
+
+model PostAnalysis {
+  id                     String   @id @default(cuid())
+  postId                 String   @unique
+  modelVersion           String   // Track which AI model version was used
+  runAt                  DateTime @default(now())
+  
+  // Analysis results
+  topics                 String[] // Array of identified topics
+  summary                String   @db.Text
+  entities               String[] // Brands, people, places mentioned
+  captionSentiment       Float    // -1.0 to 1.0
+  avgCommentSentiment    Float?
+  commentSentimentStd    Float?   // Standard deviation
+  medianCommentSentiment Float?
+  positiveDescription    String   @db.Text
+  imageDescription       String   @db.Text
+  negativeDescription    String   @db.Text
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([runAt])
+  @@map("post_analyses")
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // "user.login", "post.analyzed", "company.created"
+  entityType String?  // "Post", "Company", "User"
+  entityId   String?
+  metadata   Json?    // Additional data about the action
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
