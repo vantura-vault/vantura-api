@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { snapshotController } from '../controllers/snapshotController';
-import { authenticate } from '../middleware/auth';
+import { snapshotController } from '../controllers/snapshotController.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 

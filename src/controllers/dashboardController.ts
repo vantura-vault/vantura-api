@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { dashboardService } from '../services/dashboard';
-import { ApiResponse } from '../types';
+import { dashboardService } from '../services/dashboard.js';
+import { ApiResponse } from '../types/index.js';
 
 export const dashboardController = {
   /**

@@ -1,5 +1,5 @@
-import { prisma } from '../config/database';
-import { RegisterDTO, LoginDTO, AuthResponseDTO } from '../types';
+import { prisma } from '../config/database.js';
+import { RegisterDTO, LoginDTO, AuthResponseDTO } from '../types/index.js';
 import crypto from 'crypto';
 
 // TODO: switch to becrypt instead of crypto, for some reason...

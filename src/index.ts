@@ -1,9 +1,9 @@
 import express from 'express';
-import authRoutes from './routes/auth';
-import companyRoutes from './routes/company';
-import snapshotRoutes from './routes/snapshots';
-import dashboardRoutes from './routes/dashboard';
-import competitorRoutes from './routes/competitor';
+import authRoutes from './routes/auth.js';
+import companyRoutes from './routes/company.js';
+import snapshotRoutes from './routes/snapshots.js';
+import dashboardRoutes from './routes/dashboard.js';
+import competitorRoutes from './routes/competitor.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

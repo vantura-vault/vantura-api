@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { competitorController } from '../controllers/competitorController';
-import { authenticate } from '../middleware/auth';
+import { competitorController } from '../controllers/competitorController.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 

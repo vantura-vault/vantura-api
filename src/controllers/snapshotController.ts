@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { snapshotService } from '../services/snapshotService';
-import { ApiResponse } from '../types';
+import { snapshotService } from '../services/snapshotService.js';
+import { ApiResponse } from '../types/index.js';
 
 export const snapshotController = {
   /**

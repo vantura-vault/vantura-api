@@ -1,4 +1,4 @@
-import { prisma } from '../config/database';
+import { prisma } from '../config/database.js';
 
 export interface CreateSnapshotDTO {
     companyPlatformId: string;

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { authService } from '../services/auth';
-import { ApiResponse } from '../types';
+import { authService } from '../services/auth.js';
+import { ApiResponse } from '../types/index.js';
 
 export const authController = {
   // POST /api/auth/register

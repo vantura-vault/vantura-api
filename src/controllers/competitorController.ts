@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { competitorService } from '../services/competitor';
-import { ApiResponse } from '../types';
+import { competitorService } from '../services/competitor.js';
+import { ApiResponse } from '../types/index.js';
 
 export const competitorController = {
   /**

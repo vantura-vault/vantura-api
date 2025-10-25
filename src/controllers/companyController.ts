@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { companyService } from '../services/company';
-import { ApiResponse } from '../types';
+import { companyService } from '../services/company.js';
+import { ApiResponse } from '../types/index.js';
 
 export const companyController = {
   /**
