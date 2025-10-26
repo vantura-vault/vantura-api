@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import companyRoutes from './routes/company.js';
 import snapshotRoutes from './routes/snapshots.js';
@@ -12,6 +13,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true,
+}));
 app.use(express.json());
 
 // Routes
