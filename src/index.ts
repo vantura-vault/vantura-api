@@ -4,6 +4,9 @@ import companyRoutes from './routes/company.js';
 import snapshotRoutes from './routes/snapshots.js';
 import dashboardRoutes from './routes/dashboard.js';
 import competitorRoutes from './routes/competitor.js';
+import analyticsRoutes from './routes/analytics.js';
+import vaultRoutes from './routes/vault.js';
+import suggestionsRoutes from './routes/suggestions.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +20,9 @@ app.use('/api/companies', companyRoutes);
 app.use('/api/snapshots', snapshotRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/competitors', competitorRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/vault', vaultRoutes);
+app.use('/api/suggestions', suggestionsRoutes);
 
 app.get('/', (_req, res) => {
   res.json({
