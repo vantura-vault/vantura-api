@@ -38,26 +38,24 @@ async function main() {
     update: {},
     create: {
       id: 'demo-company-1',
-      name: 'Vantura Demo Company'
+      name: 'Vantura Demo Company',
+      industry: 'Technology',
+      description: 'Demo company for Vantura platform'
     }
   });
 
   console.log('✅ Created demo company:', demoCompany.name);
 
-  // Create company membership
-  await prisma.companyMember.upsert({
-    where: {
-      userId: demoUser.id // Each user can only have one company
-    },
-    update: {},
-    create: {
-      userId: demoUser.id,
+  // Link user to company by updating the user's companyId
+  await prisma.user.update({
+    where: { id: demoUser.id },
+    data: {
       companyId: demoCompany.id,
       role: 'owner'
     }
   });
 
-  console.log('✅ Created company membership');
+  console.log('✅ Linked demo user to company');
 
   console.log('\n🎉 Seeding complete!');
   console.log('\n📝 Demo credentials:');
