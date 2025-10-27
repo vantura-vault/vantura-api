@@ -1,4 +1,4 @@
-// import { prisma } from '../db.js';
+import { prisma } from '../db.js';
 
 interface AddCompetitorInput {
   companyId: string;
@@ -8,32 +8,57 @@ interface AddCompetitorInput {
 }
 
 export const vaultService = {
-  async getCompetitors(_companyId: string) {
-    // TODO: Implement actual database queries
-    // Return mock data for now
-    const competitors = [
-      {
-        id: 'comp-1',
-        name: 'Competitor A',
-        website: 'https://competitor-a.com',
-        platforms: [
-          { platform: 'LinkedIn', url: 'https://linkedin.com/company/competitor-a', followers: 15000 },
-          { platform: 'Twitter', url: 'https://twitter.com/competitorA', followers: 8500 },
-        ],
-        totalFollowers: 23500,
+  async getCompetitors(companyId: string) {
+    // Get all competitor relationships for this company
+    const relationships = await prisma.companyRelationship.findMany({
+      where: {
+        companyAId: companyId,
+        relationshipType: 'competitor'
       },
-      {
-        id: 'comp-2',
-        name: 'Competitor B',
-        website: 'https://competitor-b.com',
-        platforms: [
-          { platform: 'LinkedIn', url: 'https://linkedin.com/company/competitor-b', followers: 12000 },
-        ],
-        totalFollowers: 12000,
-      },
-    ];
+      include: {
+        companyB: {
+          include: {
+            platforms: {
+              include: {
+                platform: true,
+                snapshots: {
+                  orderBy: {
+                    capturedAt: 'desc'
+                  },
+                  take: 1
+                }
+              }
+            }
+          }
+        }
+      }
+    });
 
-    return { competitors };
+    // Transform to expected format
+    const competitors = relationships.map(rel => {
+      const competitor = rel.companyB;
+
+      const platforms = competitor.platforms.map(cp => {
+        const latestSnapshot = cp.snapshots[0];
+        return {
+          platform: cp.platform.name,
+          url: cp.profileUrl,
+          followers: latestSnapshot?.followerCount || 0
+        };
+      });
+
+      const totalFollowers = platforms.reduce((sum, p) => sum + p.followers, 0);
+
+      return {
+        id: competitor.id,
+        name: competitor.name,
+        website: null, // Not in current schema
+        platforms,
+        totalFollowers
+      };
+    });
+
+    return { items: competitors };
   },
 
   async addCompetitor(input: AddCompetitorInput) {
