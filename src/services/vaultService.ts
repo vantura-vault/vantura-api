@@ -62,13 +62,51 @@ export const vaultService = {
   },
 
   async addCompetitor(input: AddCompetitorInput) {
-    // TODO: Implement actual database creation
-    const { name, website, platforms } = input;
+    const { companyId, name, platforms } = input;
+
+    // Create the competitor company
+    const competitorCompany = await prisma.company.create({
+      data: {
+        name,
+        industry: null,
+        description: null
+      }
+    });
+
+    // Link as competitor
+    await prisma.companyRelationship.create({
+      data: {
+        companyAId: companyId,
+        companyBId: competitorCompany.id,
+        relationshipType: 'competitor'
+      }
+    });
+
+    // Add platform accounts if provided
+    if (platforms && platforms.length > 0) {
+      for (const platformInput of platforms) {
+        // Find or create platform
+        const platform = await prisma.platform.upsert({
+          where: { name: platformInput.platform },
+          update: {},
+          create: { name: platformInput.platform }
+        });
+
+        // Create company platform
+        await prisma.companyPlatform.create({
+          data: {
+            companyId: competitorCompany.id,
+            platformId: platform.id,
+            profileUrl: platformInput.url
+          }
+        });
+      }
+    }
 
     return {
-      id: `comp-${Date.now()}`,
-      name,
-      website,
+      id: competitorCompany.id,
+      name: competitorCompany.name,
+      website: null,
       platforms: platforms || [],
     };
   },
