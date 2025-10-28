@@ -22,6 +22,8 @@ export interface RegisterDTO{
   email: string;
   name: string;
   password: string;
+  companyName: string;
+  companyIndustry: string;
 }
 
 export interface LoginDTO {

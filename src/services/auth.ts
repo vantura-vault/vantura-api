@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 export const authService = {
   // registering new user
-  // 
+  //
   async register(data: RegisterDTO): Promise<AuthResponseDTO>{
     const existingUser = await prisma.user.findUnique({
       where: {email: data.email}
@@ -19,18 +19,29 @@ export const authService = {
     // TODO: Hash password with bcrypt for production and store in database
     // Currently password storage is not implemented in the schema
 
-    // create user
+    // Create company first
+    const company = await prisma.company.create({
+      data: {
+        name: data.companyName,
+        industry: data.companyIndustry,
+        description: null
+      }
+    });
+
+    // create user and link to company
     const user = await prisma.user.create({
       data: {
         email: data.email,
         name: data.name,
+        companyId: company.id,
+        role: 'owner' // First user is the owner
         // TODO: add password field to schema and store hashed password
         // password: hashedPassword
       }
     });
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + (365 * 24 * 3600 * 1000)); // 7 days  
+    const expiresAt = new Date(Date.now() + (365 * 24 * 3600 * 1000)); // 1 year
     // create authentication token
     await prisma.authToken.create({
       data: {
@@ -39,7 +50,7 @@ export const authService = {
         expiresAt
       }
     });
-    
+
 
     return{
       user:{

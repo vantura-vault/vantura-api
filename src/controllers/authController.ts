@@ -6,17 +6,23 @@ export const authController = {
   // POST /api/auth/register
   async register(req: Request, res:Response): Promise<void> {
     try{
-      const { email, name, password } = req.body;
+      const { email, name, password, companyName, companyIndustry } = req.body;
 
-      if (!email || !name || !password){
+      if (!email || !name || !password || !companyName || !companyIndustry){
         res.status(400).json({
           success: false,
-          error: "email, name, and password are required'"
+          error: "email, name, password, companyName, and companyIndustry are required"
         });
         return;
       }
 
-      const result = await authService.register({email, name, password});
+      const result = await authService.register({
+        email,
+        name,
+        password,
+        companyName,
+        companyIndustry
+      });
 
       const response: ApiResponse = {
         success: true,
