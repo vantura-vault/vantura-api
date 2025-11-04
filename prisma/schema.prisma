@@ -188,7 +188,11 @@ model PostAnalysis {
   postId                 String   @unique
   modelVersion           String   // Track which AI model version was used
   runAt                  DateTime @default(now())
-  
+
+  // Performance metrics
+  impressions            Int      @default(0) // Total views/impressions
+  engagement             Int      @default(0) // Total engagement (likes + comments + shares)
+
   // Analysis results
   topics                 String[] // Array of identified topics
   summary                String   @db.Text

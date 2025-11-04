@@ -151,35 +151,19 @@ export const dashboardService = {
         ? (totalFollowerGrowth / totalOldestFollowers) * 100
         : 0;
 
-    // Calculate posts this week
+    // TODO: Refactor to use platform snapshots for better performance
+    // Currently counting directly from Post table for accuracy during MVP demo
+    // Once snapshot sync is reliable, calculate from snapshot deltas instead
+    // Calculate posts this week by counting actual posts from the Post table
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    const postsThisWeekData = await Promise.all(
-      company.platforms.map(async (cp) => {
-        // Get latest snapshot
-        const latest = await prisma.platformSnapshot.findFirst({
-          where: { platformId: cp.id },
-          orderBy: { capturedAt: 'desc' }
-        });
-
-        // Get snapshot from 1 week ago
-        const weekAgo = await prisma.platformSnapshot.findFirst({
-          where: {
-            platformId: cp.id,
-            capturedAt: { lte: oneWeekAgo }
-          },
-          orderBy: { capturedAt: 'desc' }
-        });
-
-        if (latest && weekAgo) {
-          return latest.postCount - weekAgo.postCount;
-        }
-        return 0;
-      })
-    );
-
-    const postsThisWeek = postsThisWeekData.reduce((sum, count) => sum + count, 0);
+    const postsThisWeek = await prisma.post.count({
+      where: {
+        companyId,
+        postedAt: { gte: oneWeekAgo }
+      }
+    });
 
     // Calculate average growth rate
     const growthRates = platformStats
@@ -243,6 +227,48 @@ export const dashboardService = {
       insights.push(`${postsThisWeek} posts published this week`);
     }
 
+    // Calculate average engagement rate from posts
+    const now = new Date();
+    const thirtyDaysAgoDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const recentPosts = await prisma.post.findMany({
+      where: { companyId },
+      include: { analysis: true },
+      orderBy: { postedAt: 'desc' },
+      take: 20 // Last 20 posts
+    });
+
+    // Get older posts for growth comparison
+    const olderPosts = await prisma.post.findMany({
+      where: {
+        companyId,
+        postedAt: { lt: thirtyDaysAgoDate }
+      },
+      include: { analysis: true },
+      orderBy: { postedAt: 'desc' },
+      take: 20
+    });
+
+    // Calculate recent engagement rate
+    let avgEngagementRate = 0;
+    if (recentPosts.length > 0) {
+      const totalReach = recentPosts.reduce((sum, p) => sum + (p.analysis?.impressions || 0), 0);
+      const totalEngagement = recentPosts.reduce((sum, p) => sum + (p.analysis?.engagement || 0), 0);
+      avgEngagementRate = totalReach > 0 ? (totalEngagement / totalReach) * 100 : 0;
+    }
+
+    // Calculate older engagement rate for growth
+    let olderEngagementRate = 0;
+    if (olderPosts.length > 0) {
+      const totalReach = olderPosts.reduce((sum, p) => sum + (p.analysis?.impressions || 0), 0);
+      const totalEngagement = olderPosts.reduce((sum, p) => sum + (p.analysis?.engagement || 0), 0);
+      olderEngagementRate = totalReach > 0 ? (totalEngagement / totalReach) * 100 : 0;
+    }
+
+    const engagementGrowth = olderEngagementRate > 0
+      ? ((avgEngagementRate - olderEngagementRate) / olderEngagementRate) * 100
+      : 0;
+
     // Combine all recent activity for timeline
     const allActivity = platformStats
       .flatMap((p) =>
@@ -268,8 +294,8 @@ export const dashboardService = {
           percentage: parseFloat(totalFollowerGrowthPercent.toFixed(2))
         },
         avgEngagement: {
-          rate: 0, // TODO: Calculate when posts are added
-          growth: 0 // TODO: Calculate when posts are added
+          rate: parseFloat(avgEngagementRate.toFixed(2)),
+          growth: parseFloat(engagementGrowth.toFixed(2))
         },
         totalPosts,
         postsThisWeek,

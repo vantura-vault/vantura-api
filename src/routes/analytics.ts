@@ -5,5 +5,6 @@ const router = Router();
 
 router.get('/historical', analyticsController.getHistoricalMetrics);
 router.get('/recent', analyticsController.getRecentPosts);
+router.get('/summary', analyticsController.getSummary);
 
 export default router;
