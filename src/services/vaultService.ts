@@ -129,4 +129,51 @@ export const vaultService = {
       ],
     };
   },
+
+  async deleteCompetitor(competitorId: string, companyId: string) {
+    console.log('🔍 Searching for relationship:', {
+      companyAId: companyId,
+      companyBId: competitorId,
+      relationshipType: 'competitor'
+    });
+
+    // Verify the relationship exists before deleting
+    const relationship = await prisma.companyRelationship.findFirst({
+      where: {
+        companyAId: companyId,
+        companyBId: competitorId,
+        relationshipType: 'competitor'
+      }
+    });
+
+    console.log('🔍 Relationship found:', relationship);
+
+    if (!relationship) {
+      // Check if relationship exists in reverse
+      const reverseRelationship = await prisma.companyRelationship.findFirst({
+        where: {
+          companyAId: competitorId,
+          companyBId: companyId,
+          relationshipType: 'competitor'
+        }
+      });
+      console.log('🔍 Reverse relationship:', reverseRelationship);
+
+      throw new Error('Competitor relationship not found');
+    }
+
+    // Delete the relationship
+    await prisma.companyRelationship.delete({
+      where: {
+        companyAId_companyBId: {
+          companyAId: companyId,
+          companyBId: competitorId
+        }
+      }
+    });
+
+    console.log('✅ Relationship deleted');
+
+    return { success: true };
+  }
 };

@@ -94,4 +94,46 @@ export const vaultController = {
       });
     }
   },
+
+  // DELETE /api/vault/competitors/:id
+  async deleteCompetitor(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { companyId } = req.query;
+
+      console.log('🗑️  DELETE request received:', {
+        competitorId: id,
+        companyId,
+        user: req.user?.email,
+        userCompanyId: req.user?.companyId
+      });
+
+      if (!companyId) {
+        res.status(400).json({
+          success: false,
+          error: 'companyId is required',
+        });
+        return;
+      }
+
+      const data = await vaultService.deleteCompetitor(
+        id,
+        companyId as string
+      );
+
+      console.log('✅ Competitor deleted successfully');
+
+      res.json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      console.error('❌ Delete competitor error:', error);
+      const statusCode = error instanceof Error && error.message === 'Competitor relationship not found' ? 404 : 500;
+      res.status(statusCode).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete competitor',
+      });
+    }
+  },
 };
