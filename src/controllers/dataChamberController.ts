@@ -22,15 +22,16 @@ const updateSettingsSchema = z.object({
  * GET /api/data-chamber/settings
  * Get company data chamber settings
  */
-export const getSettings = async (req: Request, res: Response) => {
+export const getSettings = async (req: Request, res: Response): Promise<void> => {
   try {
     const companyId = req.query.companyId as string;
 
     if (!companyId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'companyId query parameter is required',
       });
+      return;
     }
 
     const settings = await dataChamberService.getSettings(companyId);
@@ -52,26 +53,28 @@ export const getSettings = async (req: Request, res: Response) => {
  * PUT /api/data-chamber/settings
  * Update company data chamber settings
  */
-export const updateSettings = async (req: Request, res: Response) => {
+export const updateSettings = async (req: Request, res: Response): Promise<void> => {
   try {
     const companyId = req.query.companyId as string;
 
     if (!companyId) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'companyId query parameter is required',
       });
+      return;
     }
 
     // Validate request body
     const validationResult = updateSettingsSchema.safeParse(req.body);
 
     if (!validationResult.success) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Invalid request data',
-        details: validationResult.error.errors,
+        details: validationResult.error.issues,
       });
+      return;
     }
 
     const settings = await dataChamberService.updateSettings(
