@@ -8,6 +8,7 @@ import competitorRoutes from './routes/competitor.js';
 import analyticsRoutes from './routes/analytics.js';
 import vaultRoutes from './routes/vault.js';
 import suggestionsRoutes from './routes/suggestions.js';
+import dataChamberRoutes from './routes/dataChamber.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,6 +29,7 @@ app.use('/api/competitors', competitorRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/vault', vaultRoutes);
 app.use('/api/suggestions', suggestionsRoutes);
+app.use('/api/data-chamber', dataChamberRoutes);
 
 app.get('/', (_req, res) => {
   res.json({
