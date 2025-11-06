@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { dataChamberService } from '../services/dataChamberService';
+import { dataChamberService } from '../services/dataChamberService.js';
 
 // Validation schemas
 const strategicGoalSchema = z.object({
