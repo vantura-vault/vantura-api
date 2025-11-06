@@ -111,22 +111,88 @@ export const vaultService = {
     };
   },
 
-  async getCompetitorDetails(_competitorId: string, _companyId: string) {
-    // TODO: Implement actual database queries
-    return {
-      id: 'comp-1',
-      name: 'Competitor A',
-      website: 'https://competitor-a.com',
-      accounts: [
-        {
-          platform: 'LinkedIn',
-          profileUrl: 'https://linkedin.com/company/competitor-a',
-          snapshots: Array.from({ length: 30 }, (_, i) => ({
-            snapshotDate: new Date(Date.now() - i * 24 * 60 * 60 * 1000),
-            followers: 15000 - i * 50,
-          })),
+  async getCompetitorDetails(competitorId: string, companyId: string) {
+    // Verify the competitor relationship exists
+    const relationship = await prisma.companyRelationship.findFirst({
+      where: {
+        companyAId: companyId,
+        companyBId: competitorId,
+        relationshipType: 'competitor'
+      }
+    });
+
+    if (!relationship) {
+      throw new Error('Competitor not found');
+    }
+
+    // Get competitor company with platforms and posts
+    const competitor = await prisma.company.findUnique({
+      where: { id: competitorId },
+      include: {
+        platforms: {
+          include: {
+            platform: true,
+            snapshots: {
+              orderBy: { capturedAt: 'desc' },
+              take: 90 // Last 90 days
+            }
+          }
         },
-      ],
+        posts: {
+          include: {
+            platform: true,
+            analysis: true,
+            metricsSnapshots: {
+              orderBy: { capturedAt: 'desc' },
+              take: 1
+            }
+          },
+          orderBy: { postedAt: 'desc' },
+          take: 20
+        }
+      }
+    });
+
+    if (!competitor) {
+      throw new Error('Competitor not found');
+    }
+
+    // Transform platforms with snapshots
+    const platforms = competitor.platforms.map(cp => ({
+      platform: cp.platform.name,
+      profileUrl: cp.profileUrl,
+      currentFollowers: cp.snapshots[0]?.followerCount || 0,
+      snapshots: cp.snapshots.map(s => ({
+        date: s.capturedAt,
+        followers: s.followerCount,
+        posts: s.postCount || 0
+      }))
+    }));
+
+    // Transform posts
+    const posts = competitor.posts.map(post => {
+      const latestSnapshot = post.metricsSnapshots[0];
+      return {
+        id: post.id,
+        platform: post.platform.name,
+        content: post.captionText || '',
+        postedAt: post.postedAt,
+        impressions: post.analysis?.impressions || 0,
+        likes: latestSnapshot?.likeCount || 0,
+        comments: latestSnapshot?.commentCount || 0,
+        engagement: post.analysis?.engagement || 0,
+        engagementRate: post.analysis ?
+          ((post.analysis.engagement / post.analysis.impressions) * 100).toFixed(2) : '0'
+      };
+    });
+
+    return {
+      id: competitor.id,
+      name: competitor.name,
+      description: competitor.description,
+      industry: competitor.industry,
+      platforms,
+      posts
     };
   },
 

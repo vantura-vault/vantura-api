@@ -2,6 +2,11 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// TODO: Replace this manual script with BrightData API integration
+// This script manually creates high-engagement posts for MVP demo purposes
+// Future: Fetch real company posts via BrightData Social Media API
+// See: https://brightdata.com/products/serp-api
+
 async function addHighEngagementPosts() {
   console.log('📝 Adding high-engagement posts...');
 

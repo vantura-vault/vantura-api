@@ -2,6 +2,14 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// TODO: Replace manual data generation with BrightData API integration
+// This seed script manually creates demo data for MVP purposes
+// Future implementation:
+// 1. Follower snapshots: Fetch via BrightData Social Media API
+// 2. Posts & engagement: Fetch via BrightData Social Media API
+// 3. Competitor data: Fetch via BrightData Social Media API
+// See: https://brightdata.com/products/serp-api
+
 async function main() {
   console.log('🌱 Seeding database...');
 
