@@ -16,6 +16,7 @@ const updateSettingsSchema = z.object({
   brandVoice: z.string().optional(),
   targetAudience: z.string().optional(),
   strategicGoals: z.array(strategicGoalSchema).optional(),
+  profilePictureUrl: z.string().optional(),
 });
 
 /**

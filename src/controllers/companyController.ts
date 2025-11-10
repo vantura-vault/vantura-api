@@ -52,6 +52,7 @@ export const companyController = {
         industry,
         description,
         values,
+        profilePictureUrl: req.body.profilePictureUrl,
         platforms
       });
 
@@ -181,6 +182,49 @@ export const companyController = {
       res.status(400).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add platform'
+      });
+    }
+  },
+
+  /**
+   * PATCH /api/companies/:id
+   * Update company details
+   */
+  async update(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          success: false,
+          error: 'Not authenticated'
+        });
+        return;
+      }
+
+      const { id } = req.params;
+      const { name, industry, description, values, profilePictureUrl } = req.body;
+
+      const updatedCompany = await companyService.updateCompany(
+        id,
+        req.user.id,
+        {
+          name,
+          industry,
+          description,
+          values,
+          profilePictureUrl
+        }
+      );
+
+      res.json({
+        success: true,
+        data: updatedCompany,
+        message: 'Company updated successfully'
+      });
+    } catch (error) {
+      console.error('Update company error:', error);
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update company'
       });
     }
   }

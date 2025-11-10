@@ -285,7 +285,8 @@ export const dashboardService = {
         id: company.id,
         name: company.name,
         industry: company.industry,
-        description: company.description
+        description: company.description,
+        profilePictureUrl: company.profilePictureUrl
       },
       overview: {
         totalFollowers,

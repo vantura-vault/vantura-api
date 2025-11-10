@@ -13,6 +13,7 @@ interface DataChamberSettings {
   brandVoice: string;
   targetAudience: string;
   strategicGoals: StrategicGoal[];
+  profilePictureUrl?: string;
 }
 
 export const dataChamberService = {
@@ -27,6 +28,7 @@ export const dataChamberService = {
         brandVoice: true,
         targetAudience: true,
         strategicGoals: true,
+        profilePictureUrl: true,
       },
     });
 
@@ -45,6 +47,7 @@ export const dataChamberService = {
       brandVoice,
       targetAudience,
       strategicGoals,
+      profilePictureUrl: company.profilePictureUrl || undefined,
     };
   },
 
@@ -70,6 +73,9 @@ export const dataChamberService = {
     if (settings.strategicGoals !== undefined) {
       updateData.strategicGoals = JSON.stringify(settings.strategicGoals);
     }
+    if (settings.profilePictureUrl !== undefined) {
+      updateData.profilePictureUrl = settings.profilePictureUrl;
+    }
 
     // Update company
     const company = await prisma.company.update({
@@ -80,6 +86,7 @@ export const dataChamberService = {
         brandVoice: true,
         targetAudience: true,
         strategicGoals: true,
+        profilePictureUrl: true,
       },
     });
 
@@ -89,6 +96,7 @@ export const dataChamberService = {
       brandVoice: company.brandVoice || '',
       targetAudience: company.targetAudience || '',
       strategicGoals: company.strategicGoals ? JSON.parse(company.strategicGoals) : [],
+      profilePictureUrl: company.profilePictureUrl || undefined,
     };
   },
 };

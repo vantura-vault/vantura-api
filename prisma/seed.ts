@@ -48,7 +48,8 @@ async function main() {
       id: 'demo-company-1',
       name: 'Vantura Demo Company',
       industry: 'Technology',
-      description: 'Demo company for Vantura platform'
+      description: 'Demo company for Vantura platform',
+      profilePictureUrl: 'https://api.dicebear.com/7.x/initials/svg?seed=VDC&backgroundColor=3B82F6'
     }
   });
 

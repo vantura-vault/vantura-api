@@ -48,6 +48,7 @@ export interface CreateCompanyDTO{
   industry?: string;
   description?: string;
   values?: string;
+  profilePictureUrl?: string;
   platforms: {
     platformName: string;
     profileUrl: string;
@@ -65,6 +66,7 @@ export interface CompanyResponseDTO{
   industry: string | null;
   description: string | null;
   values: string | null;
+  profilePictureUrl: string | null;
   platforms: {
     id: string;
     platformId: string;
@@ -121,6 +123,7 @@ export interface DashboardResponseDTO {
     name: string;
     industry: string | null;
     description: string | null;
+    profilePictureUrl: string | null;
   };
   overview: {
     totalFollowers: number;

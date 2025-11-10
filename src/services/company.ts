@@ -15,10 +15,19 @@ export interface CreateCompanyDTO{
     industry?: string;
     description?: string;
     values?: string;
+    profilePictureUrl?: string;
     platforms:{
         platformName: string;
         profileUrl: string;
     } [];
+}
+
+export interface UpdateCompanyDTO{
+    name?: string;
+    industry?: string;
+    description?: string;
+    values?: string;
+    profilePictureUrl?: string;
 }
 
 export const companyService = {
@@ -61,7 +70,8 @@ export const companyService = {
                     name: data.name,
                     industry: data.industry,
                     description: data.description,
-                    values: data.values
+                    values: data.values,
+                    profilePictureUrl: data.profilePictureUrl
                 }
             });
 
@@ -207,5 +217,42 @@ export const companyService = {
         });
 
         return companyPlatform;
+    },
+
+    async updateCompany(
+        companyId: string,
+        userId: string,
+        data: UpdateCompanyDTO
+    ) {
+        // Verify user has access
+        const user = await prisma.user.findUnique({
+            where: { id: userId }
+        });
+
+        if (user?.companyId !== companyId) {
+            throw new Error('Access denied');
+        }
+
+        // Update company
+        const updatedCompany = await prisma.company.update({
+            where: { id: companyId },
+            data: {
+                name: data.name,
+                industry: data.industry,
+                description: data.description,
+                values: data.values,
+                profilePictureUrl: data.profilePictureUrl
+            },
+            include: {
+                platforms: {
+                    include: {
+                        platform: true
+                    }
+                },
+                users: true
+            }
+        });
+
+        return updatedCompany;
     }
 };

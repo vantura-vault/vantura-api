@@ -15,6 +15,9 @@ router.get('/me', companyController.getMyCompany);
 // Get company by ID
 router.get('/:id', companyController.getById);
 
+// Update company
+router.patch('/:id', companyController.update);
+
 // Add platform to company
 router.post('/:id/platforms', companyController.addPlatform);
 
