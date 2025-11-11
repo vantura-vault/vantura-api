@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/config && cp -r src/config/platform-rules dist/config/",
     "start": "npx prisma migrate deploy && npx prisma db seed && node dist/index.js",
     "db:migrate": "npx prisma migrate deploy",
     "db:seed": "npx prisma db seed",

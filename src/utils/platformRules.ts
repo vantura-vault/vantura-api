@@ -24,10 +24,27 @@ export interface PlatformRules {
  */
 export function loadPlatformRules(platform: string): PlatformRules {
   const normalizedPlatform = platform.toLowerCase();
-  const rulesPath = path.join(__dirname, '../config/platform-rules', `${normalizedPlatform}.json`);
 
-  if (!fs.existsSync(rulesPath)) {
-    throw new Error(`No rules found for platform: ${platform}. Expected file: ${rulesPath}`);
+  // Try multiple paths to support both dev and production environments
+  const possiblePaths = [
+    // Development: src/config/platform-rules
+    path.join(__dirname, '../config/platform-rules', `${normalizedPlatform}.json`),
+    // Production (compiled): dist/config/platform-rules
+    path.join(__dirname, '../../config/platform-rules', `${normalizedPlatform}.json`),
+    // Production (alternative): from project root
+    path.join(process.cwd(), 'src/config/platform-rules', `${normalizedPlatform}.json`),
+  ];
+
+  let rulesPath: string | null = null;
+  for (const testPath of possiblePaths) {
+    if (fs.existsSync(testPath)) {
+      rulesPath = testPath;
+      break;
+    }
+  }
+
+  if (!rulesPath) {
+    throw new Error(`No rules found for platform: ${platform}. Tried paths: ${possiblePaths.join(', ')}`);
   }
 
   try {
