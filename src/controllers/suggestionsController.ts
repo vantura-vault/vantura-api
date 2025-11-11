@@ -234,7 +234,7 @@ Create content for these topics with the specified angle and objective.
           { role: 'user', content: fullContext },
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.3, // Low temperature for less randomness
+        temperature: 0.7, // Moderate temperature for variety while maintaining quality
         max_tokens: 2500,
       });
 
@@ -246,11 +246,11 @@ Create content for these topics with the specified angle and objective.
         messages: [
           {
             role: 'system',
-            content: 'You create very similar post variations with minimal changes. Return JSON array of 3 texts.',
+            content: 'You create post variations with noticeable differences while keeping the core message. Return JSON array of 3 texts.',
           },
           {
             role: 'user',
-            content: `Create 3 VERY SIMILAR variations of this post. Only change minor wording, keep structure identical:
+            content: `Create 3 DIFFERENT variations of this post. Change wording, vary the hook style, adjust emphasis, but keep the core data and message:
 
 Hook: ${blueprint.hook}
 Context: ${blueprint.context}
@@ -259,7 +259,7 @@ Return: {"variants": ["text1", "text2", "text3"]}`,
           },
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.2,
+        temperature: 0.7,
         max_tokens: 1000,
       });
 
