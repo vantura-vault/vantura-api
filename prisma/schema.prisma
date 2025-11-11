@@ -58,6 +58,7 @@ model Company {
   brandVoice        String?  @db.Text
   targetAudience    String?  @db.Text
   strategicGoals    String?  @db.Text // JSON array of goals with current/target metrics
+  contentPriorities String?  @db.Text // JSON object: content style preferences (data-driven, storytelling, educational, etc.)
   profilePictureUrl String?  // Company profile picture/logo URL
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -69,6 +70,7 @@ model Company {
   relationships     CompanyRelationship[] @relation("CompanyA")
   relatedTo         CompanyRelationship[] @relation("CompanyB")
   platformSnapshots PlatformSnapshot[]
+  blueprints        Blueprint[]
 
   @@map("companies")
 }
@@ -214,6 +216,73 @@ model PostAnalysis {
 
   @@index([runAt])
   @@map("post_analyses")
+}
+
+// ============================================
+// BLUEPRINTS - AI-Generated Post Strategies
+// ============================================
+
+model Blueprint {
+  id        String   @id @default(cuid())
+  companyId String
+  title     String   // e.g., "Engaging LinkedIn Thought Leadership Post"
+  platform  String   // "LinkedIn", "Twitter", etc.
+
+  // Generation inputs
+  objective           String   // User's objective (e.g., "thought leadership")
+  topicTags           String[] // Topics used for generation
+  contentAngle        String?  // Content focus: "data-driven", "storytelling", "educational", "how-to"
+  useDataChamber      Boolean  @default(true)
+  useYourTopPosts     Boolean  @default(true)
+  useCompetitorPosts  Boolean  @default(true)
+
+  // AI Reasoning
+  reasoning           String?  @db.Text // LLM's explanation for why this blueprint works
+
+  // Visual Description
+  visualDescription String   @db.Text
+
+  // References
+  references        String?  @db.Text // JSON: inspired by top 3 industry leaders with avatars
+
+  // Post Copy
+  hook              String   @db.Text
+  context           String   @db.Text
+
+  // Hashtags & Mentions
+  hashtags          Json     // Array of {tag: string, engagement: string}
+  mentions          Json?    // Array of {handle: string, engagement: string}
+
+  // Posting Intelligence
+  bestTimeToPost        String?  // e.g., "Tuesdays, 10 AM PST"
+  recommendedFormat     String?  // e.g., "Carousel Post (Image + Text)"
+  postingInsight        String?  @db.Text
+
+  // Data & Insights
+  dataSources           String[] // e.g., ["Competitor Vault", "Talkwater API", "Brandwat"]
+  timeWindow            String?  // e.g., "Last 30 Days"
+  confidence            Float?   // e.g., 0.90 for 90%
+  yourPerformanceScore  Float?   // Performance bar value (0-100)
+  competitorScore       Float?   // Competitor performance bar value (0-100)
+
+  // Performance Forecast
+  vanturaScore          Float?   // e.g., 85 (out of 100)
+  estimatedReachMin     Int?     // e.g., 8500
+  estimatedReachMax     Int?     // e.g., 10000
+  estimatedEngagementMin Float?  // e.g., 1.2 (percentage)
+  estimatedEngagementMax Float?  // e.g., 1.8 (percentage)
+  optimizationNote      String?  @db.Text // e.g., "optimized for high visibility"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([platform])
+  @@index([createdAt])
+  @@map("blueprints")
 }
 
 // ============================================

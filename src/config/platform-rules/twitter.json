@@ -1,0 +1,240 @@
+{
+  "platform": "Twitter",
+  "description": "Fast-paced microblogging platform optimized for brevity, wit, and real-time engagement",
+
+  "hookPatterns": {
+    "description": "Opening line strategies for Twitter/X posts",
+    "patterns": [
+      {
+        "type": "hot_take",
+        "weight": 45,
+        "examples": [
+          "Unpopular opinion: [controversial statement]",
+          "Hot take: [bold claim]",
+          "[Topic] is overrated. Here's why:"
+        ],
+        "rules": "Be bold and direct. Create instant reaction. Keep under 10 words for hook."
+      },
+      {
+        "type": "list_teaser",
+        "weight": 30,
+        "examples": [
+          "[X] things about [topic] no one talks about:",
+          "I've been [doing thing] for [X] years. Here's what I learned:",
+          "[Number] mistakes [audience] makes with [topic]:"
+        ],
+        "rules": "Use specific numbers. Promise clear value. Create curiosity."
+      },
+      {
+        "type": "question",
+        "weight": 15,
+        "examples": [
+          "Why is everyone [doing thing] wrong?",
+          "What if [common belief] is backwards?",
+          "Anyone else notice [observation]?"
+        ],
+        "rules": "Shorter than LinkedIn. More casual. Invite quick responses."
+      },
+      {
+        "type": "statement",
+        "weight": 10,
+        "examples": [
+          "Real talk: [honest observation]",
+          "The truth about [topic]:",
+          "Everyone should know this about [topic]:"
+        ],
+        "rules": "Direct and punchy. No fluff. Get to the point."
+      }
+    ],
+    "avoidance": [
+      "Corporate speak or formal language",
+      "Overly long setups (get to the point fast)",
+      "Passive voice",
+      "Beating around the bush"
+    ]
+  },
+
+  "postStructure": {
+    "description": "Optimal content structure for Twitter/X",
+    "lengthRecommendations": {
+      "short": {
+        "characters": "100-150",
+        "useCase": "Quick takes, reactions, one-liners"
+      },
+      "medium": {
+        "characters": "150-220",
+        "useCase": "Insights with context, mini-threads"
+      },
+      "thread": {
+        "tweets": "3-7",
+        "characters": "200-250 per tweet",
+        "useCase": "Detailed breakdowns, stories, tutorials"
+      }
+    },
+    "idealStructure": [
+      "1. Hook (first line) - Grab attention in 5-8 words",
+      "2. Context (1-2 sentences) - Setup or expand",
+      "3. Insight (1-2 sentences) - The value or punchline",
+      "4. Optional CTA - Question or action"
+    ],
+    "formatting": {
+      "useLineBreaks": true,
+      "maxLineLength": "40-50 characters per line for readability",
+      "useEmojis": "yes (1-3 per tweet)",
+      "useLists": "numbered lists work well",
+      "boldText": "not supported - use CAPS for emphasis (sparingly)"
+    }
+  },
+
+  "hashtags": {
+    "description": "Hashtag strategy for Twitter/X",
+    "recommendedCount": {
+      "min": 1,
+      "max": 3,
+      "optimal": 2
+    },
+    "strategy": {
+      "mix": [
+        {
+          "type": "trending",
+          "count": 1,
+          "description": "Check trending topics, but only use if genuinely relevant"
+        },
+        {
+          "type": "niche",
+          "count": 1,
+          "description": "Specific to your topic/industry"
+        }
+      ],
+      "placement": "Integrated into the tweet text naturally, or at the very end",
+      "avoidance": [
+        "More than 3 hashtags (reduces engagement)",
+        "Hashtag stuffing",
+        "#HashtaggingEveryWord"
+      ]
+    }
+  },
+
+  "mentions": {
+    "description": "Tagging strategy for Twitter/X",
+    "bestPractices": [
+      "Tag sources, collaborators, or people you're discussing",
+      "Limit to 1-2 mentions per tweet (more = notification spam)",
+      "Tag at the start to give credit, or end for attribution",
+      "Use sparingly - engagement drops with too many @mentions"
+    ],
+    "format": "@username"
+  },
+
+  "timing": {
+    "description": "Optimal posting times for Twitter/X (PST)",
+    "bestTimes": [
+      {
+        "day": "Weekdays",
+        "time": "9:00 AM - 11:00 AM",
+        "reason": "Morning commute and coffee scroll"
+      },
+      {
+        "day": "Weekdays",
+        "time": "12:00 PM - 1:00 PM",
+        "reason": "Lunch break browsing"
+      },
+      {
+        "day": "Weekdays",
+        "time": "5:00 PM - 7:00 PM",
+        "reason": "Evening commute"
+      }
+    ],
+    "avoidTimes": [
+      "Late night after 10 PM (unless targeting night owls)",
+      "Very early morning before 7 AM"
+    ],
+    "note": "Twitter is 24/7 - real-time events and trending topics override scheduled timing"
+  },
+
+  "contentFormat": {
+    "description": "Post format recommendations for Twitter/X",
+    "formats": [
+      {
+        "type": "Text-only",
+        "engagement": "high",
+        "bestFor": "Hot takes, insights, questions",
+        "recommended": true
+      },
+      {
+        "type": "Image + Text",
+        "engagement": "very-high",
+        "bestFor": "Memes, screenshots, charts, visual jokes"
+      },
+      {
+        "type": "Thread",
+        "engagement": "very-high",
+        "bestFor": "Stories, tutorials, deep dives",
+        "recommended": true
+      },
+      {
+        "type": "Video",
+        "engagement": "high",
+        "bestFor": "Quick clips, reactions, demos (under 2 minutes)"
+      },
+      {
+        "type": "GIF",
+        "engagement": "medium",
+        "bestFor": "Reactions, humor, relatability"
+      }
+    ]
+  },
+
+  "toneGuidelines": {
+    "description": "Tone adjustments specific to Twitter/X",
+    "baseline": "Casual, witty, and conversational",
+    "characteristics": [
+      "Direct and punchy",
+      "Personality-driven (show your voice)",
+      "Opinionated without being preachy",
+      "Witty but not try-hard",
+      "Real-time and reactive"
+    ],
+    "languagePreferences": {
+      "use": [
+        "Casual contractions (it's, you're, don't)",
+        "Internet vernacular when appropriate",
+        "Short sentences",
+        "Active voice only",
+        "Humor and wit"
+      ],
+      "avoid": [
+        "Corporate jargon",
+        "Overly formal language",
+        "Long-winded explanations",
+        "Being preachy or condescending",
+        "Generic LinkedIn-speak"
+      ]
+    }
+  },
+
+  "engagementTriggers": {
+    "description": "Elements that drive engagement on Twitter/X",
+    "highEngagement": [
+      "Hot takes and controversial opinions (professionally)",
+      "Threads with valuable insights",
+      "Memes and humor related to your niche",
+      "Questions that invite quick responses",
+      "Breaking news or timely commentary",
+      "Personal wins or losses with lessons",
+      "Relatable observations about your industry"
+    ],
+    "mediumEngagement": [
+      "Tips and hacks",
+      "Curated links with commentary",
+      "Quote tweets with your take",
+      "Polls"
+    ],
+    "lowEngagement": [
+      "Pure promotional tweets",
+      "Generic motivational quotes",
+      "Tweets with 5+ hashtags or mentions",
+      "Copy-paste content without personality"
+    ]
+  }
+}

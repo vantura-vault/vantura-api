@@ -1,0 +1,243 @@
+{
+  "platform": "LinkedIn",
+  "description": "Professional networking platform optimized for B2B content and thought leadership",
+
+  "hookPatterns": {
+    "description": "Opening line strategies for LinkedIn posts",
+    "patterns": [
+      {
+        "type": "question",
+        "weight": 40,
+        "examples": [
+          "What if everything you know about [topic] is wrong?",
+          "Why do most [profession] struggle with [challenge]?",
+          "Ever wondered why [common situation]?"
+        ],
+        "rules": "Start with 'What if', 'Why do', 'Have you', 'Ever wondered'. Keep under 15 words."
+      },
+      {
+        "type": "bold_statement",
+        "weight": 35,
+        "examples": [
+          "Everyone is talking about [topic], but few are talking about how to actually [action].",
+          "The [industry] is broken. Here's how to fix it.",
+          "[Number]% of [profession] are doing [thing] wrong."
+        ],
+        "rules": "Make a contrarian or surprising claim. Use specifics. Challenge conventional wisdom."
+      },
+      {
+        "type": "personal_story",
+        "weight": 15,
+        "examples": [
+          "3 years ago, I made a mistake that cost us $[X].",
+          "After [number] years in [industry], one thing is clear:",
+          "I used to believe [common belief]. I was wrong."
+        ],
+        "rules": "Start with personal experience. Use specific timeframes or numbers. Lead to a lesson."
+      },
+      {
+        "type": "data_hook",
+        "weight": 10,
+        "examples": [
+          "[X]% of [audience] are missing out on [opportunity].",
+          "We analyzed [number] [items] and found something surprising:",
+          "New research shows [counter-intuitive finding]."
+        ],
+        "rules": "Lead with hard data or research. Create curiosity gap. Promise insight."
+      }
+    ],
+    "avoidance": [
+      "Generic openings like 'Today I want to talk about...'",
+      "Overly long hooks (over 20 words)",
+      "Corporate jargon without context",
+      "Clickbait without substance"
+    ]
+  },
+
+  "postStructure": {
+    "description": "Optimal content structure for LinkedIn posts",
+    "lengthRecommendations": {
+      "short": {
+        "words": "100-200",
+        "paragraphs": "1-2",
+        "useCase": "Quick insights, announcements, questions to audience"
+      },
+      "medium": {
+        "words": "200-400",
+        "paragraphs": "2-4",
+        "useCase": "Thought leadership, lessons learned, case studies"
+      },
+      "long": {
+        "words": "400-600",
+        "paragraphs": "4-6",
+        "useCase": "Deep dives, comprehensive guides, storytelling"
+      }
+    },
+    "idealStructure": [
+      "1. Hook (1-2 sentences) - Grab attention",
+      "2. Context (1-2 paragraphs) - Set up the story or insight",
+      "3. Core Insight (1-2 paragraphs) - The main value/lesson",
+      "4. Takeaway or Call-to-Action (1-2 sentences) - What should reader do/think"
+    ],
+    "formatting": {
+      "useLineBreaks": true,
+      "maxParagraphLength": "3-4 sentences",
+      "useEmojis": "sparingly (1-2 per post)",
+      "useLists": "yes, for clarity",
+      "boldText": "use for emphasis on key points"
+    }
+  },
+
+  "hashtags": {
+    "description": "Hashtag strategy for LinkedIn",
+    "recommendedCount": {
+      "min": 3,
+      "max": 5,
+      "optimal": 4
+    },
+    "strategy": {
+      "mix": [
+        {
+          "type": "niche",
+          "count": 2,
+          "description": "Highly specific to your industry/topic (10k-100k posts)"
+        },
+        {
+          "type": "medium",
+          "count": 1,
+          "description": "Broader industry terms (100k-1M posts)"
+        },
+        {
+          "type": "trending",
+          "count": 1,
+          "description": "Current trends or events (varies)"
+        }
+      ],
+      "placement": "End of post, after main content",
+      "avoidance": [
+        "Generic hashtags with 10M+ posts (#business, #marketing)",
+        "More than 5 hashtags (looks spammy)",
+        "Irrelevant trending tags just for reach"
+      ]
+    }
+  },
+
+  "mentions": {
+    "description": "Tagging strategy for LinkedIn",
+    "bestPractices": [
+      "Only tag people/companies directly relevant to the content",
+      "Tag collaborators, sources, or people quoted",
+      "Limit to 2-3 mentions per post",
+      "Always add value - don't tag just for reach"
+    ],
+    "format": "@FirstName LastName or @CompanyName"
+  },
+
+  "timing": {
+    "description": "Optimal posting times for LinkedIn (PST)",
+    "bestTimes": [
+      {
+        "day": "Tuesday",
+        "time": "10:00 AM - 12:00 PM",
+        "reason": "Peak professional browsing time"
+      },
+      {
+        "day": "Wednesday",
+        "time": "9:00 AM - 11:00 AM",
+        "reason": "Mid-week engagement peak"
+      },
+      {
+        "day": "Thursday",
+        "time": "10:00 AM - 12:00 PM",
+        "reason": "High activity before weekend"
+      }
+    ],
+    "avoidTimes": [
+      "Weekends (50% lower engagement)",
+      "Early mornings before 7 AM",
+      "Late evenings after 6 PM"
+    ]
+  },
+
+  "contentFormat": {
+    "description": "Post format recommendations for LinkedIn",
+    "formats": [
+      {
+        "type": "Text-only",
+        "engagement": "medium",
+        "bestFor": "Quick thoughts, insights, questions"
+      },
+      {
+        "type": "Image + Text",
+        "engagement": "high",
+        "bestFor": "Visual data, infographics, quotes"
+      },
+      {
+        "type": "Carousel",
+        "engagement": "very-high",
+        "bestFor": "Step-by-step guides, multi-point stories, before/after",
+        "recommended": true
+      },
+      {
+        "type": "Video",
+        "engagement": "very-high",
+        "bestFor": "Demonstrations, interviews, behind-the-scenes"
+      },
+      {
+        "type": "Document/PDF",
+        "engagement": "high",
+        "bestFor": "Reports, whitepapers, detailed guides"
+      }
+    ]
+  },
+
+  "toneGuidelines": {
+    "description": "Tone adjustments specific to LinkedIn",
+    "baseline": "Professional but approachable",
+    "characteristics": [
+      "Authoritative without being arrogant",
+      "Personal without being overly casual",
+      "Data-driven but storytelling-focused",
+      "Educational while being engaging"
+    ],
+    "languagePreferences": {
+      "use": [
+        "Industry-specific terminology (when appropriate)",
+        "First-person narrative ('I', 'we')",
+        "Active voice",
+        "Conversational transitions"
+      ],
+      "avoid": [
+        "Excessive corporate jargon",
+        "All caps (except for emphasis)",
+        "Overly salesy language",
+        "Clickbait without substance"
+      ]
+    }
+  },
+
+  "engagementTriggers": {
+    "description": "Elements that drive engagement on LinkedIn",
+    "highEngagement": [
+      "Personal stories with lessons learned",
+      "Data visualizations or research findings",
+      "Controversial (but professional) takes",
+      "Questions that invite discussion",
+      "How-to content with actionable steps",
+      "Behind-the-scenes insights",
+      "Failures and lessons learned"
+    ],
+    "mediumEngagement": [
+      "Industry news with commentary",
+      "Company updates with context",
+      "Thought leadership essays",
+      "Curated resources"
+    ],
+    "lowEngagement": [
+      "Pure promotional content",
+      "Generic inspirational quotes",
+      "Reposted content without original insight",
+      "Overly long text walls without formatting"
+    ]
+  }
+}

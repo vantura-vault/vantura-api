@@ -1,5 +1,6 @@
 import express from 'express';
 import authRoutes from './routes/auth.js';
+import blueprintRoutes from './routes/blueprint.js';
 
 const app = express();
 const PORT  = process.env.PORT || 3000;
@@ -7,6 +8,7 @@ const PORT  = process.env.PORT || 3000;
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/blueprints', blueprintRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok'});
