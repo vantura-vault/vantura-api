@@ -17,7 +17,6 @@ export const suggestionsController = {
         objective,
         contentAngle,
         topicTags,
-        nVariants,
         useDataChamber,
         useYourTopPosts,
         useCompetitorPosts,
