@@ -28,6 +28,15 @@ export const vaultService = {
                   take: 1
                 }
               }
+            },
+            posts: {
+              include: {
+                analysis: true
+              },
+              orderBy: {
+                postedAt: 'desc'
+              },
+              take: 20 // Get last 20 posts for engagement calculation
             }
           }
         }
@@ -49,12 +58,22 @@ export const vaultService = {
 
       const totalFollowers = platforms.reduce((sum, p) => sum + p.followers, 0);
 
+      // Calculate average engagement rate from posts with analytics
+      const postsWithAnalytics = competitor.posts.filter(post => post.analysis && post.analysis.impressions > 0);
+      const averageEngagement = postsWithAnalytics.length > 0
+        ? postsWithAnalytics.reduce((sum, post) => {
+            const engagementRate = (post.analysis!.engagement / post.analysis!.impressions) * 100;
+            return sum + engagementRate;
+          }, 0) / postsWithAnalytics.length
+        : 0;
+
       return {
         id: competitor.id,
         name: competitor.name,
         website: null, // Not in current schema
         platforms,
-        totalFollowers
+        totalFollowers,
+        averageEngagement
       };
     });
 

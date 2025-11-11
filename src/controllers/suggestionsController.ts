@@ -264,12 +264,23 @@ Return: {"variants": ["text1", "text2", "text3"]}`,
       });
 
       const variantsData = JSON.parse(variantsCompletion.choices[0].message.content || '{"variants":[]}');
-      const variants = (variantsData.variants || []).map((text: string) => ({
-        text,
-        analyticsScore: (blueprint.vanturaScore || 85) * 0.9,
-        criticScore: (blueprint.vanturaScore || 85) * 0.85,
-        finalScore: blueprint.vanturaScore || 85,
-      }));
+      const variants = (variantsData.variants || []).map((text: string) => {
+        // Add slight variation to scores (±3 points from base)
+        const baseScore = blueprint.vanturaScore || 85;
+        const variation = (Math.random() - 0.5) * 6; // Random between -3 and +3
+        const finalScore = Math.max(0, Math.min(100, baseScore + variation));
+
+        // Analytics and critic scores with their own slight variations
+        const analyticsScore = Math.max(0, Math.min(100, finalScore * (0.88 + Math.random() * 0.04))); // 88-92% of final
+        const criticScore = Math.max(0, Math.min(100, finalScore * (0.83 + Math.random() * 0.04))); // 83-87% of final
+
+        return {
+          text,
+          analyticsScore: Math.round(analyticsScore * 100) / 100,
+          criticScore: Math.round(criticScore * 100) / 100,
+          finalScore: Math.round(finalScore * 100) / 100,
+        };
+      });
 
       // Return response
       res.json({
