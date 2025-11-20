@@ -270,7 +270,7 @@ Create content for these topics with the specified angle and objective.
         messages: [
           {
             role: 'system',
-            content: 'You create post variations with noticeable differences while keeping the core message. Return JSON array of 3 texts.',
+            content: 'You create post variations with noticeable differences while keeping the core message. Return JSON with variants array containing objects with "text" and "reasoning" fields.',
           },
           {
             role: 'user',
@@ -279,16 +279,26 @@ Create content for these topics with the specified angle and objective.
 Hook: ${blueprint.hook}
 Context: ${blueprint.context}
 
-Return: {"variants": ["text1", "text2", "text3"]}`,
+For each variant, provide:
+1. The full post text
+2. A brief reasoning (1-2 sentences) explaining WHY this specific variant will work based on its hook style, tone, and platform best practices.
+
+Return: {
+  "variants": [
+    {"text": "variant 1 text", "reasoning": "This variant works because..."},
+    {"text": "variant 2 text", "reasoning": "This variant works because..."},
+    {"text": "variant 3 text", "reasoning": "This variant works because..."}
+  ]
+}`,
           },
         ],
         response_format: { type: 'json_object' },
         temperature: 0.7,
-        max_tokens: 1000,
+        max_tokens: 1500,
       });
 
       const variantsData = JSON.parse(variantsCompletion.choices[0].message.content || '{"variants":[]}');
-      const variants = (variantsData.variants || []).map((text: string) => {
+      const variants = (variantsData.variants || []).map((variant: { text: string; reasoning: string }) => {
         // Add slight variation to scores (±3 points from base)
         const baseScore = blueprint.vanturaScore || 85;
         const variation = (Math.random() - 0.5) * 6; // Random between -3 and +3
@@ -299,7 +309,8 @@ Return: {"variants": ["text1", "text2", "text3"]}`,
         const criticScore = Math.max(0, Math.min(100, finalScore * (0.83 + Math.random() * 0.04))); // 83-87% of final
 
         return {
-          text,
+          text: variant.text,
+          reasoning: variant.reasoning,
           analyticsScore: Math.round(analyticsScore * 100) / 100,
           criticScore: Math.round(criticScore * 100) / 100,
           finalScore: Math.round(finalScore * 100) / 100,

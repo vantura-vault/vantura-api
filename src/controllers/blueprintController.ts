@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { createBlueprint, getBlueprints, getBlueprintById, deleteBlueprint } from '../services/blueprint.js';
+import { createBlueprint, getBlueprints, getBlueprintById, updateBlueprintTitle, deleteBlueprint } from '../services/blueprint.js';
 
 export const blueprintController = {
   // POST /api/blueprints
@@ -7,7 +7,7 @@ export const blueprintController = {
     try {
       const blueprint = await createBlueprint(req.body);
 
-      res.json({
+      res.status(201).json({
         success: true,
         data: blueprint,
       });
@@ -20,10 +20,10 @@ export const blueprintController = {
     }
   },
 
-  // GET /api/blueprints?companyId=X
+  // GET /api/blueprints?companyId=X&platform=LinkedIn&sortBy=createdAt&sortOrder=desc&limit=20&offset=0
   async list(req: Request, res: Response): Promise<void> {
     try {
-      const { companyId } = req.query;
+      const { companyId, platform, sortBy, sortOrder, limit, offset } = req.query;
 
       if (!companyId || typeof companyId !== 'string') {
         res.status(400).json({
@@ -33,11 +33,18 @@ export const blueprintController = {
         return;
       }
 
-      const blueprints = await getBlueprints(companyId);
+      const result = await getBlueprints({
+        companyId,
+        platform: platform as string | undefined,
+        sortBy: (sortBy as any) || 'createdAt',
+        sortOrder: (sortOrder as any) || 'desc',
+        limit: limit ? Number(limit) : 20,
+        offset: offset ? Number(offset) : 0,
+      });
 
       res.json({
         success: true,
-        data: blueprints,
+        data: result,
       });
     } catch (error) {
       console.error('List blueprints error:', error);
@@ -85,6 +92,43 @@ export const blueprintController = {
     }
   },
 
+  // PATCH /api/blueprints/:id - Update blueprint title
+  async update(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { companyId, title } = req.body;
+
+      if (!companyId || typeof companyId !== 'string') {
+        res.status(400).json({
+          success: false,
+          error: 'companyId is required',
+        });
+        return;
+      }
+
+      if (!title || typeof title !== 'string' || title.length === 0 || title.length > 100) {
+        res.status(400).json({
+          success: false,
+          error: 'title is required and must be 1-100 characters',
+        });
+        return;
+      }
+
+      const blueprint = await updateBlueprintTitle(id, companyId, title);
+
+      res.json({
+        success: true,
+        data: blueprint,
+      });
+    } catch (error) {
+      console.error('Update blueprint error:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update blueprint',
+      });
+    }
+  },
+
   // DELETE /api/blueprints/:id?companyId=X
   async delete(req: Request, res: Response): Promise<void> {
     try {
@@ -103,7 +147,7 @@ export const blueprintController = {
 
       res.json({
         success: true,
-        data: { deleted: true },
+        data: { message: 'Blueprint deleted successfully' },
       });
     } catch (error) {
       console.error('Delete blueprint error:', error);

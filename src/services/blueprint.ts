@@ -6,9 +6,11 @@ export interface CreateBlueprintInput {
   platform: string;
   objective: string;
   topicTags: string[];
+  contentAngle?: string;
   useDataChamber?: boolean;
   useYourTopPosts?: boolean;
   useCompetitorPosts?: boolean;
+  reasoning?: string;
   visualDescription: string;
   references?: string;
   hook: string;
@@ -39,9 +41,11 @@ export async function createBlueprint(input: CreateBlueprintInput) {
       platform: input.platform,
       objective: input.objective,
       topicTags: input.topicTags,
+      contentAngle: input.contentAngle,
       useDataChamber: input.useDataChamber ?? true,
       useYourTopPosts: input.useYourTopPosts ?? true,
       useCompetitorPosts: input.useCompetitorPosts ?? true,
+      reasoning: input.reasoning,
       visualDescription: input.visualDescription,
       references: input.references,
       hook: input.hook,
@@ -68,13 +72,49 @@ export async function createBlueprint(input: CreateBlueprintInput) {
   return blueprint;
 }
 
-export async function getBlueprints(companyId: string) {
-  const blueprints = await prisma.blueprint.findMany({
-    where: { companyId },
-    orderBy: { createdAt: 'desc' },
-  });
+export interface GetBlueprintsParams {
+  companyId: string;
+  platform?: string;
+  sortBy?: 'createdAt' | 'vanturaScore' | 'title';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
 
-  return blueprints;
+export async function getBlueprints(params: GetBlueprintsParams) {
+  const {
+    companyId,
+    platform,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    limit = 20,
+    offset = 0,
+  } = params;
+
+  const where: any = { companyId };
+  if (platform) {
+    where.platform = platform;
+  }
+
+  const orderBy: any = {};
+  orderBy[sortBy] = sortOrder;
+
+  const [blueprints, total] = await Promise.all([
+    prisma.blueprint.findMany({
+      where,
+      orderBy,
+      take: limit,
+      skip: offset,
+    }),
+    prisma.blueprint.count({ where }),
+  ]);
+
+  return {
+    blueprints,
+    total,
+    limit,
+    offset,
+  };
 }
 
 export async function getBlueprintById(id: string, companyId: string) {
@@ -85,10 +125,32 @@ export async function getBlueprintById(id: string, companyId: string) {
   return blueprint;
 }
 
+export async function updateBlueprintTitle(id: string, companyId: string, title: string) {
+  const blueprint = await prisma.blueprint.updateMany({
+    where: { id, companyId },
+    data: { title },
+  });
+
+  if (blueprint.count === 0) {
+    throw new Error('Blueprint not found or unauthorized');
+  }
+
+  // Fetch the updated blueprint to return it
+  const updatedBlueprint = await prisma.blueprint.findUnique({
+    where: { id },
+  });
+
+  return updatedBlueprint;
+}
+
 export async function deleteBlueprint(id: string, companyId: string) {
   const blueprint = await prisma.blueprint.deleteMany({
     where: { id, companyId },
   });
+
+  if (blueprint.count === 0) {
+    throw new Error('Blueprint not found or unauthorized');
+  }
 
   return blueprint;
 }
