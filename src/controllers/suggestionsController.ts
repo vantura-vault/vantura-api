@@ -226,6 +226,30 @@ USER REQUEST:
 Create content for these topics with the specified angle and objective.
 `;
 
+      // 📋 LOG THE COMPLETE PROMPT TO CONSOLE
+      console.log('\n' + '='.repeat(80));
+      console.log('📋 BLUEPRINT GENERATION PROMPT');
+      console.log('='.repeat(80));
+      console.log('\n🎯 SYSTEM PROMPT:');
+      console.log('-'.repeat(80));
+      console.log(SYSTEM_PROMPT);
+      console.log('\n💬 USER PROMPT:');
+      console.log('-'.repeat(80));
+      console.log(fullContext);
+      console.log('\n📊 METADATA:');
+      console.log('-'.repeat(80));
+      console.log(`Company ID: ${companyId}`);
+      console.log(`Platform: ${platform}`);
+      console.log(`Objective: ${objective || 'engagement'}`);
+      console.log(`Content Angle: ${contentAngle || 'balanced'}`);
+      console.log(`Topics: ${topicTags?.join(', ') || 'general'}`);
+      console.log(`Data Chamber: ${useDataChamber !== false ? 'ON' : 'OFF'}`);
+      console.log(`Top Posts: ${useYourTopPosts !== false ? 'ON' : 'OFF'}`);
+      console.log(`Competitor Posts: ${useCompetitorPosts !== false ? 'ON' : 'OFF'}`);
+      console.log(`Top Posts Found: ${topPostsCount}`);
+      console.log(`Competitors Analyzed: ${competitorCount}`);
+      console.log('='.repeat(80) + '\n');
+
       // 7. Call OpenAI for blueprint
       const completion = await openai.chat.completions.create({
         model: process.env.LLM_MODEL || 'gpt-4o-mini',
