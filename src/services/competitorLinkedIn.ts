@@ -1,7 +1,6 @@
 import { prisma } from '../db.js';
 import {
   scrapeLinkedInCompany,
-  pollBrightDataSnapshot,
   extractLinkedInCompanySlug,
 } from './brightdata.js';
 
@@ -31,13 +30,9 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
     throw new Error('Company not found');
   }
 
-  // Trigger BrightData scraping
-  console.log(`[LinkedIn] Triggering scrape for: ${linkedinUrl}`);
-  const snapshotId = await scrapeLinkedInCompany(linkedinUrl);
-
-  // Poll until results are ready
-  console.log(`[LinkedIn] Polling snapshot: ${snapshotId}`);
-  const results = await pollBrightDataSnapshot(snapshotId);
+  // Scrape LinkedIn via BrightData (synchronous)
+  console.log(`[LinkedIn] Scraping company: ${linkedinUrl}`);
+  const results = await scrapeLinkedInCompany(linkedinUrl);
 
   if (!results || results.length === 0) {
     throw new Error('No data returned from BrightData');

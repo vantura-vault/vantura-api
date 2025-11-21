@@ -2,7 +2,8 @@ import axios from 'axios';
 
 // BrightData API configuration
 const BRIGHTDATA_API_KEY = process.env.BRIGHTDATA_API_KEY;
-const BRIGHTDATA_LINKEDIN_SCRAPER_URL = 'https://api.brightdata.com/datasets/v3/trigger';
+const BRIGHTDATA_DATASET_ID = 'gd_l1vikfnt1wgvvqz95w'; // LinkedIn Company Scraper dataset ID
+const BRIGHTDATA_SCRAPE_URL = 'https://api.brightdata.com/datasets/v3/scrape';
 
 export interface BrightDataLinkedInCompany {
   id: string;
@@ -37,98 +38,46 @@ export interface BrightDataLinkedInCompany {
   timestamp: string;
 }
 
-interface BrightDataResponse {
-  snapshot_id: string;
-  status: string;
-}
-
 /**
- * Trigger BrightData to scrape a LinkedIn company page
+ * Scrape LinkedIn company page using BrightData (synchronous API)
+ * Returns the scraped data directly
  */
-export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<string> {
+export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<BrightDataLinkedInCompany[]> {
   if (!BRIGHTDATA_API_KEY) {
     throw new Error('BRIGHTDATA_API_KEY is not configured');
   }
 
   try {
-    const response = await axios.post<BrightDataResponse>(
-      BRIGHTDATA_LINKEDIN_SCRAPER_URL,
-      [
-        {
-          url: linkedinUrl,
-        },
-      ],
+    const response = await axios.post<BrightDataLinkedInCompany[]>(
+      BRIGHTDATA_SCRAPE_URL,
+      {
+        input: [{ url: linkedinUrl }],
+      },
       {
         headers: {
           Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
           'Content-Type': 'application/json',
         },
         params: {
-          dataset_id: 'gd_l7q7dkf244hwjntr0', // BrightData LinkedIn Company Scraper dataset ID
+          dataset_id: BRIGHTDATA_DATASET_ID,
+          notify: false,
           include_errors: true,
         },
-      }
-    );
-
-    return response.data.snapshot_id;
-  } catch (error) {
-    console.error('BrightData scrape error:', error);
-    throw new Error('Failed to trigger LinkedIn scraping');
-  }
-}
-
-/**
- * Get the results of a BrightData scraping job
- */
-export async function getBrightDataSnapshot(snapshotId: string): Promise<BrightDataLinkedInCompany[]> {
-  if (!BRIGHTDATA_API_KEY) {
-    throw new Error('BRIGHTDATA_API_KEY is not configured');
-  }
-
-  try {
-    const response = await axios.get<BrightDataLinkedInCompany[]>(
-      `https://api.brightdata.com/datasets/v3/snapshot/${snapshotId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
-        },
-        params: {
-          format: 'json',
-        },
+        timeout: 120000, // 2 minute timeout
       }
     );
 
     return response.data;
   } catch (error) {
-    console.error('BrightData snapshot fetch error:', error);
-    throw new Error('Failed to fetch scraping results');
-  }
-}
-
-/**
- * Poll BrightData until the scraping job is complete (with timeout)
- */
-export async function pollBrightDataSnapshot(
-  snapshotId: string,
-  maxAttempts = 30,
-  delayMs = 2000
-): Promise<BrightDataLinkedInCompany[]> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const data = await getBrightDataSnapshot(snapshotId);
-      if (data && data.length > 0) {
-        return data;
-      }
-    } catch (error) {
-      // Continue polling if not ready yet
+    console.error('BrightData scrape error:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
     }
-
-    // Wait before next attempt
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    throw new Error('Failed to trigger LinkedIn scraping');
   }
-
-  throw new Error('BrightData scraping timed out');
 }
+
 
 /**
  * Extract LinkedIn company ID/slug from URL
