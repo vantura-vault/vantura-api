@@ -48,7 +48,7 @@ export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<Bright
   }
 
   try {
-    const response = await axios.post<BrightDataLinkedInCompany[]>(
+    const response = await axios.post<BrightDataLinkedInCompany[] | BrightDataLinkedInCompany>(
       BRIGHTDATA_SCRAPE_URL,
       {
         input: [{ url: linkedinUrl }],
@@ -67,7 +67,10 @@ export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<Bright
       }
     );
 
-    return response.data;
+    // BrightData can return either an array or a single object
+    // Normalize to always return an array
+    const data = response.data;
+    return Array.isArray(data) ? data : [data];
   } catch (error) {
     console.error('BrightData scrape error:', error);
     if (axios.isAxiosError(error)) {
