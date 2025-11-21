@@ -3,7 +3,6 @@ import {
   scrapeLinkedInCompany,
   pollBrightDataSnapshot,
   extractLinkedInCompanySlug,
-  BrightDataLinkedInCompany,
 } from './brightdata.js';
 
 export interface AddCompetitorViaLinkedInInput {
