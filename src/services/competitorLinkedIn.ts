@@ -62,12 +62,18 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
   // Validate required fields
   if (!companyData) {
     console.error('[LinkedIn] First result is null or undefined');
-    throw new Error('Invalid company data returned from BrightData');
+    throw new Error('No company data returned from BrightData. The LinkedIn URL may be invalid or the company page may not be accessible.');
   }
 
   if (!companyData.name) {
-    console.error('[LinkedIn] Company data missing name field:', companyData);
-    throw new Error('Company name not found in BrightData response');
+    console.error('[LinkedIn] Company data missing name field:', JSON.stringify(companyData, null, 2));
+
+    // Check if BrightData returned an error
+    if ((companyData as any).error) {
+      throw new Error(`BrightData error: ${(companyData as any).error}`);
+    }
+
+    throw new Error('Unable to fetch company data from LinkedIn. The company page may be restricted or unavailable.');
   }
 
   // Check if competitor already exists (by LinkedIn URL)
