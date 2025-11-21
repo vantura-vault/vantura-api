@@ -34,21 +34,31 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
   console.log(`[LinkedIn] Scraping company: ${linkedinUrl}`);
   const results = await scrapeLinkedInCompany(linkedinUrl);
 
+  console.log(`[LinkedIn] BrightData response:`, JSON.stringify(results, null, 2));
+
   if (!results || results.length === 0) {
     throw new Error('No data returned from BrightData');
   }
 
   const companyData = results[0]; // BrightData returns array, take first result
 
+  // Validate required fields
+  if (!companyData || !companyData.name) {
+    console.error('[LinkedIn] Invalid company data:', companyData);
+    throw new Error('Invalid company data returned from BrightData');
+  }
+
   // Check if competitor already exists (by LinkedIn URL)
-  const existingPlatform = await prisma.companyPlatform.findFirst({
-    where: {
-      profileUrl: companyData.url,
-    },
-    include: {
-      company: true,
-    },
-  });
+  const existingPlatform = companyData.url
+    ? await prisma.companyPlatform.findFirst({
+        where: {
+          profileUrl: companyData.url,
+        },
+        include: {
+          company: true,
+        },
+      })
+    : null;
 
   let competitorId: string;
 
@@ -114,16 +124,19 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
   });
 
   // Create PlatformSnapshot (follower count, post count)
+  const followerCount = companyData.followers ?? 0;
+  const postCount = Array.isArray(companyData.updates) ? companyData.updates.length : 0;
+
   await prisma.platformSnapshot.create({
     data: {
       companyId: competitorId,
       platformId: companyPlatform.id,
-      followerCount: companyData.followers || 0,
-      postCount: companyData.updates?.length || 0,
+      followerCount,
+      postCount,
     },
   });
 
-  console.log(`[LinkedIn] Created snapshot: ${companyData.followers} followers, ${companyData.updates?.length || 0} posts`);
+  console.log(`[LinkedIn] Created snapshot: ${followerCount} followers, ${postCount} posts`);
 
   // Create CompanyRelationship (mark as competitor)
   const existingRelationship = await prisma.companyRelationship.findFirst({
@@ -146,7 +159,7 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
   }
 
   // Import recent posts (optional - store top 10 posts)
-  if (companyData.updates && companyData.updates.length > 0) {
+  if (Array.isArray(companyData.updates) && companyData.updates.length > 0) {
     const postsToImport = companyData.updates.slice(0, 10);
 
     for (const update of postsToImport) {
@@ -219,8 +232,8 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
     industry: competitor!.industry,
     description: competitor!.description,
     profilePictureUrl: competitor!.profilePictureUrl,
-    linkedinUrl: companyData.url,
-    followers: companyData.followers,
-    postsImported: companyData.updates?.length || 0,
+    linkedinUrl: companyData.url || linkedinUrl,
+    followers: followerCount,
+    postsImported: postCount,
   };
 }
