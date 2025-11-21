@@ -32,20 +32,42 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
 
   // Scrape LinkedIn via BrightData (synchronous)
   console.log(`[LinkedIn] Scraping company: ${linkedinUrl}`);
-  const results = await scrapeLinkedInCompany(linkedinUrl);
+  let results;
 
+  try {
+    results = await scrapeLinkedInCompany(linkedinUrl);
+  } catch (error) {
+    console.error('[LinkedIn] BrightData scraping failed:', error);
+    throw new Error('Failed to scrape LinkedIn company data');
+  }
+
+  console.log(`[LinkedIn] BrightData response type:`, typeof results);
   console.log(`[LinkedIn] BrightData response:`, JSON.stringify(results, null, 2));
 
-  if (!results || results.length === 0) {
+  if (!results) {
     throw new Error('No data returned from BrightData');
+  }
+
+  if (!Array.isArray(results)) {
+    console.error('[LinkedIn] BrightData response is not an array:', results);
+    throw new Error('Invalid response format from BrightData');
+  }
+
+  if (results.length === 0) {
+    throw new Error('No companies found in BrightData response');
   }
 
   const companyData = results[0]; // BrightData returns array, take first result
 
   // Validate required fields
-  if (!companyData || !companyData.name) {
-    console.error('[LinkedIn] Invalid company data:', companyData);
+  if (!companyData) {
+    console.error('[LinkedIn] First result is null or undefined');
     throw new Error('Invalid company data returned from BrightData');
+  }
+
+  if (!companyData.name) {
+    console.error('[LinkedIn] Company data missing name field:', companyData);
+    throw new Error('Company name not found in BrightData response');
   }
 
   // Check if competitor already exists (by LinkedIn URL)
