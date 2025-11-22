@@ -106,6 +106,7 @@ export const vaultService = {
     if (platforms && platforms.length > 0) {
       for (const platformInput of platforms) {
         let followerCount = platformInput.followers || 0;
+        let brightDataCompanyData = null;
 
         // If LinkedIn URL provided without follower count, try to scrape
         if (platformInput.platform === 'LinkedIn' && platformInput.url && !platformInput.followers) {
@@ -113,9 +114,10 @@ export const vaultService = {
             console.log(`🔍 Scraping LinkedIn data for: ${platformInput.url}`);
             const brightDataResults = await scrapeLinkedInCompany(platformInput.url);
             if (brightDataResults && brightDataResults.length > 0) {
-              const companyData = brightDataResults[0];
-              followerCount = companyData.followers || 0;
+              brightDataCompanyData = brightDataResults[0];
+              followerCount = brightDataCompanyData.followers || 0;
               console.log(`✅ Scraped follower count: ${followerCount}`);
+              console.log(`✅ Scraped ${brightDataCompanyData.updates?.length || 0} posts`);
             }
           } catch (error) {
             console.warn(`⚠️  Failed to scrape LinkedIn data, using default: ${error}`);
@@ -145,10 +147,64 @@ export const vaultService = {
             companyId: competitorCompany.id,
             platformId: companyPlatform.id,
             followerCount,
-            postCount: 0,
+            postCount: brightDataCompanyData?.updates?.length || 0,
             capturedAt: new Date()
           }
         });
+
+        // If BrightData returned posts, create Post and PostAnalysis records
+        if (brightDataCompanyData?.updates && brightDataCompanyData.updates.length > 0) {
+          console.log(`💾 Storing ${brightDataCompanyData.updates.length} posts with engagement data...`);
+
+          for (const update of brightDataCompanyData.updates) {
+            try {
+              // Create the post
+              const post = await prisma.post.create({
+                data: {
+                  companyId: competitorCompany.id,
+                  platformId: platform.id,
+                  captionText: update.text || update.title || '',
+                  postedAt: new Date(update.date || update.time),
+                  externalId: update.post_id,
+                  externalUrl: update.post_url,
+                }
+              });
+
+              // Calculate engagement metrics
+              const totalEngagement = (update.likes_count || 0) + (update.comments_count || 0);
+              const impressions = followerCount > 0 ? followerCount : 1000; // Estimate impressions as follower count
+
+              // Create post analysis
+              await prisma.postAnalysis.create({
+                data: {
+                  postId: post.id,
+                  impressions,
+                  engagement: totalEngagement,
+                  sentimentScore: 0, // Neutral by default
+                  viralityScore: 0,
+                  analyzedAt: new Date()
+                }
+              });
+
+              // Create post snapshot for like/comment tracking
+              await prisma.postSnapshot.create({
+                data: {
+                  postId: post.id,
+                  likeCount: update.likes_count || 0,
+                  commentCount: update.comments_count || 0,
+                  capturedAt: new Date()
+                }
+              });
+
+              console.log(`  ✓ Stored post: ${update.post_id} (${totalEngagement} engagement)`);
+            } catch (postError) {
+              console.warn(`  ⚠️  Failed to store post ${update.post_id}:`, postError);
+              // Continue with next post
+            }
+          }
+
+          console.log(`✅ Successfully stored ${brightDataCompanyData.updates.length} posts`);
+        }
       }
     }
 
