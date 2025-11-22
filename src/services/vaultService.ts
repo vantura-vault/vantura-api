@@ -1,10 +1,11 @@
 import { prisma } from '../db.js';
+import { scrapeLinkedInCompany } from './brightdata.js';
 
 interface AddCompetitorInput {
   companyId: string;
   name: string;
   website?: string;
-  platforms?: Array<{ platform: string; url: string }>;
+  platforms?: Array<{ platform: string; url: string; followers?: number }>;
 }
 
 export const vaultService = {
@@ -104,6 +105,24 @@ export const vaultService = {
     // Add platform accounts if provided
     if (platforms && platforms.length > 0) {
       for (const platformInput of platforms) {
+        let followerCount = platformInput.followers || 0;
+
+        // If LinkedIn URL provided without follower count, try to scrape
+        if (platformInput.platform === 'LinkedIn' && platformInput.url && !platformInput.followers) {
+          try {
+            console.log(`🔍 Scraping LinkedIn data for: ${platformInput.url}`);
+            const brightDataResults = await scrapeLinkedInCompany(platformInput.url);
+            if (brightDataResults && brightDataResults.length > 0) {
+              const companyData = brightDataResults[0];
+              followerCount = companyData.followers || 0;
+              console.log(`✅ Scraped follower count: ${followerCount}`);
+            }
+          } catch (error) {
+            console.warn(`⚠️  Failed to scrape LinkedIn data, using default: ${error}`);
+            // Continue with followerCount = 0
+          }
+        }
+
         // Find or create platform
         const platform = await prisma.platform.upsert({
           where: { name: platformInput.platform },
@@ -112,11 +131,22 @@ export const vaultService = {
         });
 
         // Create company platform
-        await prisma.companyPlatform.create({
+        const companyPlatform = await prisma.companyPlatform.create({
           data: {
             companyId: competitorCompany.id,
             platformId: platform.id,
             profileUrl: platformInput.url
+          }
+        });
+
+        // Create initial snapshot with follower count (from input, BrightData, or 0)
+        await prisma.platformSnapshot.create({
+          data: {
+            companyId: competitorCompany.id,
+            platformId: companyPlatform.id,
+            followerCount,
+            postCount: 0,
+            capturedAt: new Date()
           }
         });
       }
