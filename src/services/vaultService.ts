@@ -72,6 +72,7 @@ export const vaultService = {
         id: competitor.id,
         name: competitor.name,
         website: null, // Not in current schema
+        logoUrl: competitor.profilePictureUrl,
         platforms,
         totalFollowers,
         averageEngagement
@@ -84,12 +85,13 @@ export const vaultService = {
   async addCompetitor(input: AddCompetitorInput) {
     const { companyId, name, platforms } = input;
 
-    // Create the competitor company
+    // Create the competitor company (we'll update logo after scraping)
     const competitorCompany = await prisma.company.create({
       data: {
         name,
         industry: null,
-        description: null
+        description: null,
+        profilePictureUrl: null
       }
     });
 
@@ -118,6 +120,15 @@ export const vaultService = {
               followerCount = brightDataCompanyData.followers || 0;
               console.log(`✅ Scraped follower count: ${followerCount}`);
               console.log(`✅ Scraped ${brightDataCompanyData.updates?.length || 0} posts`);
+
+              // Update company logo if available
+              if (brightDataCompanyData.logo) {
+                await prisma.company.update({
+                  where: { id: competitorCompany.id },
+                  data: { profilePictureUrl: brightDataCompanyData.logo }
+                });
+                console.log(`✅ Updated company logo: ${brightDataCompanyData.logo}`);
+              }
             }
           } catch (error) {
             console.warn(`⚠️  Failed to scrape LinkedIn data, using default: ${error}`);
@@ -165,8 +176,9 @@ export const vaultService = {
                   platformId: platform.id,
                   captionText: update.text || update.title || '',
                   postedAt: new Date(update.date || update.time),
-                  externalId: update.post_id,
-                  externalUrl: update.post_url,
+                  platformPostId: update.post_id,
+                  postUrl: update.post_url,
+                  mediaType: update.images?.length ? 'image' : (update.videos?.length ? 'video' : 'text'),
                 }
               });
 
@@ -178,11 +190,16 @@ export const vaultService = {
               await prisma.postAnalysis.create({
                 data: {
                   postId: post.id,
+                  modelVersion: 'brightdata-scrape-v1',
                   impressions,
                   engagement: totalEngagement,
-                  sentimentScore: 0, // Neutral by default
-                  viralityScore: 0,
-                  analyzedAt: new Date()
+                  topics: [],
+                  summary: update.title || 'LinkedIn post',
+                  entities: [],
+                  captionSentiment: 0, // Neutral by default
+                  positiveDescription: '',
+                  imageDescription: '',
+                  negativeDescription: '',
                 }
               });
 
