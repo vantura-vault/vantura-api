@@ -5,7 +5,6 @@ const BRIGHTDATA_API_KEY = process.env.BRIGHTDATA_API_KEY;
 const BRIGHTDATA_COMPANY_DATASET_ID = 'gd_l1vikfnt1wgvvqz95w'; // LinkedIn Company Scraper dataset ID
 const BRIGHTDATA_PROFILE_DATASET_ID = 'gd_l1viktl72bvl7bjuj0'; // LinkedIn Profile Scraper dataset ID
 const BRIGHTDATA_SCRAPE_URL = 'https://api.brightdata.com/datasets/v3/scrape';
-const BRIGHTDATA_TRIGGER_URL = 'https://api.brightdata.com/datasets/v3/trigger';
 
 export interface BrightDataLinkedInCompany {
   id: string;
