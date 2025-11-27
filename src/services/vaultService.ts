@@ -50,6 +50,11 @@ export const vaultService = {
 
       const platforms = competitor.platforms.map(cp => {
         const latestSnapshot = cp.snapshots[0];
+        console.log(`📊 Platform ${cp.platform.name} for ${competitor.name}:`, {
+          hasSnapshot: !!latestSnapshot,
+          followerCount: latestSnapshot?.followerCount,
+          snapshotDate: latestSnapshot?.capturedAt
+        });
         return {
           platform: cp.platform.name,
           url: cp.profileUrl,
@@ -61,6 +66,10 @@ export const vaultService = {
 
       // Calculate average engagement rate from posts with analytics
       const postsWithAnalytics = competitor.posts.filter(post => post.analysis && post.analysis.impressions > 0);
+      console.log(`📈 Posts for ${competitor.name}:`, {
+        totalPosts: competitor.posts.length,
+        postsWithAnalytics: postsWithAnalytics.length
+      });
       const averageEngagement = postsWithAnalytics.length > 0
         ? postsWithAnalytics.reduce((sum, post) => {
             const engagementRate = (post.analysis!.engagement / post.analysis!.impressions) * 100;
