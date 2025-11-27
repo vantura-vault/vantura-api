@@ -160,12 +160,12 @@ export const vaultService = {
               console.log(`✅ Scraped ${brightDataProfileData.posts?.length || 0} posts`);
 
               // Update company logo with profile picture if available
-              if (brightDataProfileData.image) {
+              if (brightDataProfileData.avatar) {
                 await prisma.company.update({
                   where: { id: competitorCompany.id },
-                  data: { profilePictureUrl: brightDataProfileData.image }
+                  data: { profilePictureUrl: brightDataProfileData.avatar }
                 });
-                console.log(`✅ Updated profile picture: ${brightDataProfileData.image}`);
+                console.log(`✅ Updated profile picture: ${brightDataProfileData.avatar}`);
               }
             }
           } catch (error) {
