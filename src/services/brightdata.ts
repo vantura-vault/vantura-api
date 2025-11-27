@@ -103,7 +103,7 @@ export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<Bright
           notify: false,
           include_errors: true,
         },
-        timeout: 120000, // 2 minute timeout
+        timeout: 180000, // 3 minute timeout
       }
     );
 
@@ -148,7 +148,7 @@ export async function scrapeLinkedInProfile(linkedinUrl: string): Promise<Bright
           notify: false,
           include_errors: true,
         },
-        timeout: 120000, // 2 minute timeout
+        timeout: 150000, // 2.5 minute timeout (profiles take ~90 seconds)
       }
     );
 

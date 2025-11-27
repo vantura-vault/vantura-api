@@ -1,5 +1,5 @@
 import { prisma } from '../db.js';
-import { scrapeLinkedInCompany } from './brightdata.js';
+import { scrapeLinkedInCompany, scrapeLinkedInProfile, type BrightDataLinkedInProfile } from './brightdata.js';
 
 interface AddCompetitorInput {
   companyId: string;
@@ -109,7 +109,7 @@ export const vaultService = {
       for (const platformInput of platforms) {
         let followerCount = 0;
         let brightDataCompanyData = null;
-        // Profile scraping is disabled for now (too slow), will be implemented as background job
+        let brightDataProfileData: BrightDataLinkedInProfile | null = null;
 
         // If LinkedIn company URL provided, try to scrape
         if (platformInput.platform === 'LinkedIn' && platformInput.url && platformInput.type === 'company') {
@@ -137,13 +137,31 @@ export const vaultService = {
           }
         }
 
-        // If LinkedIn profile URL provided, skip scraping for now (profile scraping is too slow)
-        // TODO: Implement background job to scrape profiles asynchronously
+        // If LinkedIn profile URL provided, try to scrape (note: this may take 3-5 minutes)
         if (platformInput.platform === 'LinkedIn' && platformInput.url && platformInput.type === 'profile') {
-          console.log(`ℹ️  Profile scraping skipped (will be implemented as background job): ${platformInput.url}`);
-          console.log(`⚠️  Profile will be added with 0 followers initially`);
-          // Skip scraping - profile will be created with 0 followers
-          // In the future, we can trigger async scraping here and update later
+          try {
+            console.log(`🔍 Scraping LinkedIn profile data for: ${platformInput.url}`);
+            console.log(`⏳ Note: Profile scraping may take 1-2 minutes...`);
+            const brightDataResults = await scrapeLinkedInProfile(platformInput.url);
+            if (brightDataResults && brightDataResults.length > 0) {
+              brightDataProfileData = brightDataResults[0];
+              followerCount = brightDataProfileData.followers || brightDataProfileData.connections || 0;
+              console.log(`✅ Scraped followers/connections: ${followerCount}`);
+              console.log(`✅ Scraped ${brightDataProfileData.posts?.length || 0} posts`);
+
+              // Update company logo with profile picture if available
+              if (brightDataProfileData.profile_picture) {
+                await prisma.company.update({
+                  where: { id: competitorCompany.id },
+                  data: { profilePictureUrl: brightDataProfileData.profile_picture }
+                });
+                console.log(`✅ Updated profile picture: ${brightDataProfileData.profile_picture}`);
+              }
+            }
+          } catch (error) {
+            console.warn(`⚠️  Failed to scrape LinkedIn profile data, using default: ${error}`);
+            // Continue with followerCount = 0
+          }
         }
 
         // Find or create platform
@@ -163,7 +181,7 @@ export const vaultService = {
         });
 
         // Create initial snapshot with follower count (from input, BrightData, or 0)
-        const postCount = brightDataCompanyData?.updates?.length || 0;
+        const postCount = (brightDataCompanyData?.updates?.length || 0) + (brightDataProfileData?.posts?.length || 0);
         await prisma.platformSnapshot.create({
           data: {
             companyId: competitorCompany.id,
@@ -234,8 +252,65 @@ export const vaultService = {
           console.log(`✅ Successfully stored ${brightDataCompanyData.updates.length} company posts`);
         }
 
-        // Profile post storage removed (profile scraping is disabled)
-        // TODO: Re-enable when async profile scraping is implemented
+        // If BrightData returned profile posts, create Post and PostAnalysis records
+        if (brightDataProfileData?.posts && brightDataProfileData.posts.length > 0) {
+          console.log(`💾 Storing ${brightDataProfileData.posts.length} profile posts with engagement data...`);
+
+          for (const post of brightDataProfileData.posts) {
+            try {
+              // Create the post
+              const postRecord = await prisma.post.create({
+                data: {
+                  companyId: competitorCompany.id,
+                  platformId: platform.id,
+                  captionText: post.text || '',
+                  postedAt: new Date(post.date || post.time),
+                  platformPostId: post.post_id,
+                  postUrl: post.post_url,
+                  mediaType: post.images?.length ? 'image' : (post.videos?.length ? 'video' : 'text'),
+                }
+              });
+
+              // Calculate engagement metrics (include reposts if available)
+              const totalEngagement = (post.likes_count || 0) + (post.comments_count || 0) + (post.reposts_count || 0);
+              const impressions = followerCount > 0 ? followerCount : 1000; // Estimate impressions as follower/connection count
+
+              // Create post analysis
+              await prisma.postAnalysis.create({
+                data: {
+                  postId: postRecord.id,
+                  modelVersion: 'brightdata-profile-scrape-v1',
+                  impressions,
+                  engagement: totalEngagement,
+                  topics: [],
+                  summary: 'LinkedIn profile post',
+                  entities: [],
+                  captionSentiment: 0, // Neutral by default
+                  positiveDescription: '',
+                  imageDescription: '',
+                  negativeDescription: '',
+                }
+              });
+
+              // Create post snapshot for like/comment tracking
+              await prisma.postSnapshot.create({
+                data: {
+                  postId: postRecord.id,
+                  likeCount: post.likes_count || 0,
+                  commentCount: post.comments_count || 0,
+                  capturedAt: new Date()
+                }
+              });
+
+              console.log(`  ✓ Stored profile post: ${post.post_id} (${totalEngagement} engagement)`);
+            } catch (postError) {
+              console.warn(`  ⚠️  Failed to store profile post ${post.post_id}:`, postError);
+              // Continue with next post
+            }
+          }
+
+          console.log(`✅ Successfully stored ${brightDataProfileData.posts.length} profile posts`);
+        }
       }
     }
 
