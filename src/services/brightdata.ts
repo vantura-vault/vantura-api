@@ -47,7 +47,7 @@ export interface BrightDataLinkedInProfile {
   connections?: number;
   followers?: number;
   about?: string;
-  profile_picture?: string;
+  image?: string; // Profile picture URL
   url: string;
   posts?: Array<{
     likes_count: number;
