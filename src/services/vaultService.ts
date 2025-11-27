@@ -1,5 +1,5 @@
 import { prisma } from '../db.js';
-import { scrapeLinkedInCompany, scrapeLinkedInProfile } from './brightdata.js';
+import { scrapeLinkedInCompany } from './brightdata.js';
 
 interface AddCompetitorInput {
   companyId: string;
@@ -109,7 +109,7 @@ export const vaultService = {
       for (const platformInput of platforms) {
         let followerCount = 0;
         let brightDataCompanyData = null;
-        let brightDataProfileData = null;
+        // Profile scraping is disabled for now (too slow), will be implemented as background job
 
         // If LinkedIn company URL provided, try to scrape
         if (platformInput.platform === 'LinkedIn' && platformInput.url && platformInput.type === 'company') {
@@ -163,7 +163,7 @@ export const vaultService = {
         });
 
         // Create initial snapshot with follower count (from input, BrightData, or 0)
-        const postCount = (brightDataCompanyData?.updates?.length || 0) + (brightDataProfileData?.posts?.length || 0);
+        const postCount = brightDataCompanyData?.updates?.length || 0;
         await prisma.platformSnapshot.create({
           data: {
             companyId: competitorCompany.id,
@@ -234,65 +234,8 @@ export const vaultService = {
           console.log(`✅ Successfully stored ${brightDataCompanyData.updates.length} company posts`);
         }
 
-        // If BrightData returned profile posts, create Post and PostAnalysis records
-        if (brightDataProfileData?.posts && brightDataProfileData.posts.length > 0) {
-          console.log(`💾 Storing ${brightDataProfileData.posts.length} profile posts with engagement data...`);
-
-          for (const post of brightDataProfileData.posts) {
-            try {
-              // Create the post
-              const postRecord = await prisma.post.create({
-                data: {
-                  companyId: competitorCompany.id,
-                  platformId: platform.id,
-                  captionText: post.text || '',
-                  postedAt: new Date(post.date || post.time),
-                  platformPostId: post.post_id,
-                  postUrl: post.post_url,
-                  mediaType: post.images?.length ? 'image' : (post.videos?.length ? 'video' : 'text'),
-                }
-              });
-
-              // Calculate engagement metrics (include reposts if available)
-              const totalEngagement = (post.likes_count || 0) + (post.comments_count || 0) + (post.reposts_count || 0);
-              const impressions = followerCount > 0 ? followerCount : 1000; // Estimate impressions as follower/connection count
-
-              // Create post analysis
-              await prisma.postAnalysis.create({
-                data: {
-                  postId: postRecord.id,
-                  modelVersion: 'brightdata-profile-scrape-v1',
-                  impressions,
-                  engagement: totalEngagement,
-                  topics: [],
-                  summary: 'LinkedIn profile post',
-                  entities: [],
-                  captionSentiment: 0, // Neutral by default
-                  positiveDescription: '',
-                  imageDescription: '',
-                  negativeDescription: '',
-                }
-              });
-
-              // Create post snapshot for like/comment tracking
-              await prisma.postSnapshot.create({
-                data: {
-                  postId: postRecord.id,
-                  likeCount: post.likes_count || 0,
-                  commentCount: post.comments_count || 0,
-                  capturedAt: new Date()
-                }
-              });
-
-              console.log(`  ✓ Stored profile post: ${post.post_id} (${totalEngagement} engagement)`);
-            } catch (postError) {
-              console.warn(`  ⚠️  Failed to store profile post ${post.post_id}:`, postError);
-              // Continue with next post
-            }
-          }
-
-          console.log(`✅ Successfully stored ${brightDataProfileData.posts.length} profile posts`);
-        }
+        // Profile post storage removed (profile scraping is disabled)
+        // TODO: Re-enable when async profile scraping is implemented
       }
     }
 
