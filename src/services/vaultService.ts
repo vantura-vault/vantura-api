@@ -137,30 +137,13 @@ export const vaultService = {
           }
         }
 
-        // If LinkedIn profile URL provided, try to scrape
+        // If LinkedIn profile URL provided, skip scraping for now (profile scraping is too slow)
+        // TODO: Implement background job to scrape profiles asynchronously
         if (platformInput.platform === 'LinkedIn' && platformInput.url && platformInput.type === 'profile') {
-          try {
-            console.log(`🔍 Scraping LinkedIn profile data for: ${platformInput.url}`);
-            const brightDataResults = await scrapeLinkedInProfile(platformInput.url);
-            if (brightDataResults && brightDataResults.length > 0) {
-              brightDataProfileData = brightDataResults[0];
-              followerCount = brightDataProfileData.followers || brightDataProfileData.connections || 0;
-              console.log(`✅ Scraped followers/connections: ${followerCount}`);
-              console.log(`✅ Scraped ${brightDataProfileData.posts?.length || 0} posts`);
-
-              // Update company logo with profile picture if available
-              if (brightDataProfileData.profile_picture) {
-                await prisma.company.update({
-                  where: { id: competitorCompany.id },
-                  data: { profilePictureUrl: brightDataProfileData.profile_picture }
-                });
-                console.log(`✅ Updated profile picture: ${brightDataProfileData.profile_picture}`);
-              }
-            }
-          } catch (error) {
-            console.warn(`⚠️  Failed to scrape LinkedIn profile data, using default: ${error}`);
-            // Continue with followerCount = 0
-          }
+          console.log(`ℹ️  Profile scraping skipped (will be implemented as background job): ${platformInput.url}`);
+          console.log(`⚠️  Profile will be added with 0 followers initially`);
+          // Skip scraping - profile will be created with 0 followers
+          // In the future, we can trigger async scraping here and update later
         }
 
         // Find or create platform
