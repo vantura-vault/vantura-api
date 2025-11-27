@@ -3,8 +3,9 @@ import axios from 'axios';
 // BrightData API configuration
 const BRIGHTDATA_API_KEY = process.env.BRIGHTDATA_API_KEY;
 const BRIGHTDATA_COMPANY_DATASET_ID = 'gd_l1vikfnt1wgvvqz95w'; // LinkedIn Company Scraper dataset ID
-const BRIGHTDATA_PROFILE_DATASET_ID = 'gd_l1viktl72bvl7bjuj'; // LinkedIn Profile Scraper dataset ID
+const BRIGHTDATA_PROFILE_DATASET_ID = 'gd_l1viktl72bvl7bjuj0'; // LinkedIn Profile Scraper dataset ID
 const BRIGHTDATA_SCRAPE_URL = 'https://api.brightdata.com/datasets/v3/scrape';
+const BRIGHTDATA_TRIGGER_URL = 'https://api.brightdata.com/datasets/v3/trigger';
 
 export interface BrightDataLinkedInCompany {
   id: string;
@@ -124,7 +125,7 @@ export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<Bright
 
 /**
  * Scrape LinkedIn profile page using BrightData
- * Uses trigger API since profiles may require async processing
+ * Uses scrape API endpoint (synchronous) like company scraper
  */
 export async function scrapeLinkedInProfile(linkedinUrl: string): Promise<BrightDataLinkedInProfile[]> {
   if (!BRIGHTDATA_API_KEY) {
@@ -132,7 +133,7 @@ export async function scrapeLinkedInProfile(linkedinUrl: string): Promise<Bright
   }
 
   try {
-    // Use scrape API for synchronous response (same as company)
+    // Use scrape API with same format as company scraper
     const response = await axios.post<BrightDataLinkedInProfile[] | BrightDataLinkedInProfile>(
       BRIGHTDATA_SCRAPE_URL,
       {
