@@ -152,6 +152,7 @@ export const vaultService = {
             console.log(`🔍 Scraping LinkedIn profile data for: ${platformInput.url}`);
             console.log(`⏳ Note: Profile scraping may take 1-2 minutes...`);
             const brightDataResults = await scrapeLinkedInProfile(platformInput.url);
+            console.log(`🔍 BrightData raw response:`, JSON.stringify(brightDataResults, null, 2));
             if (brightDataResults && brightDataResults.length > 0) {
               brightDataProfileData = brightDataResults[0];
               followerCount = brightDataProfileData.followers || brightDataProfileData.connections || 0;
