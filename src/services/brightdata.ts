@@ -249,7 +249,7 @@ export async function scrapeLinkedInPosts(
       ? [{ url: linkedinUrl, start_date: dateRange.startDate, end_date: dateRange.endDate }]
       : [{ url: linkedinUrl }];
 
-    const response = await axios.post<BrightDataLinkedInPost[] | BrightDataLinkedInPost>(
+    const response = await axios.post(
       BRIGHTDATA_SCRAPE_URL,
       { input },
       {
@@ -265,12 +265,29 @@ export async function scrapeLinkedInPosts(
           discover_by: discoverBy,
         },
         timeout: 300000, // 5 minute timeout (posts discovery can be slow)
+        // Request raw text to handle NDJSON format
+        responseType: 'text',
+        transformResponse: [(data) => data], // Prevent axios from auto-parsing
       }
     );
 
-    // BrightData can return either an array or a single object
-    const data = response.data;
-    return Array.isArray(data) ? data : [data];
+    // BrightData returns NDJSON (newline-delimited JSON) - parse each line
+    const rawData = response.data as string;
+    const posts: BrightDataLinkedInPost[] = [];
+
+    // Split by newlines and parse each JSON object
+    const lines = rawData.split('\n').filter(line => line.trim());
+    for (const line of lines) {
+      try {
+        const post = JSON.parse(line) as BrightDataLinkedInPost;
+        posts.push(post);
+      } catch (parseError) {
+        console.warn('[BrightData] Failed to parse line:', line.substring(0, 100));
+      }
+    }
+
+    console.log(`[BrightData] Parsed ${posts.length} posts from NDJSON response`);
+    return posts;
   } catch (error) {
     console.error('BrightData posts scrape error:', error);
     if (axios.isAxiosError(error)) {
