@@ -1,5 +1,7 @@
 import { prisma } from '../db.js';
 import { scrapeLinkedInCompany, scrapeLinkedInProfile, type BrightDataLinkedInProfile } from './brightdata.js';
+import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
+import { triggerAsyncScrape } from './asyncScraper.js';
 
 interface AddCompetitorInput {
   companyId: string;
@@ -320,6 +322,25 @@ export const vaultService = {
           }
 
           console.log(`✅ Successfully stored ${brightDataProfileData.posts.length} profile posts`);
+        }
+
+        // Trigger async posts scrape for more comprehensive post data
+        const existingJob = await getPendingScrapeJobForTarget(companyId, competitorCompany.id);
+        if (!existingJob && platformInput.url) {
+          try {
+            const scrapeJob = await createScrapeJob({
+              companyId,
+              targetId: competitorCompany.id,
+              targetUrl: platformInput.url,
+              platform: platformInput.platform,
+              scrapeType: platformInput.type === 'profile' ? 'profile' : 'company',
+            });
+            triggerAsyncScrape(scrapeJob.id);
+            console.log(`🚀 [AsyncScrape] Triggered posts scrape job: ${scrapeJob.id} for ${platformInput.url}`);
+          } catch (scrapeError) {
+            console.error(`⚠️ [AsyncScrape] Failed to create scrape job:`, scrapeError);
+            // Don't fail the whole operation
+          }
         }
       }
     }

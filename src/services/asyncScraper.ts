@@ -197,11 +197,19 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
     });
 
     // Execute scrape with retries
-    const posts = await executeWithRetry(jobId, companyId, () =>
+    const allPosts = await executeWithRetry(jobId, companyId, () =>
       scrapeLinkedInPosts(targetUrl, discoverType)
     );
 
-    console.log(`[AsyncScraper] Received ${posts.length} posts from BrightData`);
+    console.log(`[AsyncScraper] Received ${allPosts.length} posts from BrightData`);
+
+    // Sort by date (most recent first) and take only the 20 most recent
+    const MAX_POSTS = 20;
+    const posts = allPosts
+      .sort((a, b) => new Date(b.date_posted).getTime() - new Date(a.date_posted).getTime())
+      .slice(0, MAX_POSTS);
+
+    console.log(`[AsyncScraper] Processing ${posts.length} most recent posts (limit: ${MAX_POSTS})`);
 
     // Update progress
     await updateScrapeJob(jobId, { progress: 60 });
