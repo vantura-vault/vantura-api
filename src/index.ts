@@ -1,4 +1,5 @@
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import companyRoutes from './routes/company.js';
@@ -11,13 +12,16 @@ import suggestionsRoutes from './routes/suggestions.js';
 import dataChamberRoutes from './routes/dataChamber.js';
 import blueprintRoutes from './routes/blueprint.js';
 import competitorLinkedInRoutes from './routes/competitorLinkedIn.js';
+import { initWebSocket } from './websocket/wsServer.js';
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 3000;
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: CORS_ORIGIN,
   credentials: true,
 }));
 app.use(express.json());
@@ -55,7 +59,12 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Initialize WebSocket server
+initWebSocket(httpServer, CORS_ORIGIN);
+
 // Start server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket server ready`);
+  console.log(`🌐 CORS origin: ${CORS_ORIGIN}`);
 });

@@ -4,6 +4,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import blueprintRoutes from './routes/blueprint.js';
 import competitorLinkedInRoutes from './routes/competitorLinkedIn.js';
+import vaultRoutes from './routes/vault.js';
 import { initWebSocket } from './websocket/wsServer.js';
 
 const app = express();
@@ -23,6 +24,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/blueprints', blueprintRoutes);
 app.use('/api/competitors/linkedin', competitorLinkedInRoutes);
+app.use('/api/vault', vaultRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
