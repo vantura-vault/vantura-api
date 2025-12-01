@@ -89,7 +89,7 @@ export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<Bright
   }
 
   try {
-    const response = await axios.post<BrightDataLinkedInCompany[] | BrightDataLinkedInCompany>(
+    const response = await axios.post(
       BRIGHTDATA_SCRAPE_URL,
       {
         input: [{ url: linkedinUrl }],
@@ -105,13 +105,28 @@ export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<Bright
           include_errors: true,
         },
         timeout: 180000, // 3 minute timeout
+        // Request raw text to handle NDJSON format
+        responseType: 'text',
+        transformResponse: [(data) => data],
       }
     );
 
-    // BrightData can return either an array or a single object
-    // Normalize to always return an array
-    const data = response.data;
-    return Array.isArray(data) ? data : [data];
+    // BrightData returns NDJSON (newline-delimited JSON) - parse each line
+    const rawData = response.data as string;
+    const companies: BrightDataLinkedInCompany[] = [];
+
+    const lines = rawData.split('\n').filter(line => line.trim());
+    for (const line of lines) {
+      try {
+        const company = JSON.parse(line) as BrightDataLinkedInCompany;
+        companies.push(company);
+      } catch (parseError) {
+        console.warn('[BrightData] Failed to parse company line:', line.substring(0, 100));
+      }
+    }
+
+    console.log(`[BrightData] Parsed ${companies.length} companies from NDJSON response`);
+    return companies;
   } catch (error) {
     console.error('BrightData scrape error:', error);
     if (axios.isAxiosError(error)) {
@@ -133,8 +148,7 @@ export async function scrapeLinkedInProfile(linkedinUrl: string): Promise<Bright
   }
 
   try {
-    // Use scrape API with same format as company scraper
-    const response = await axios.post<BrightDataLinkedInProfile[] | BrightDataLinkedInProfile>(
+    const response = await axios.post(
       BRIGHTDATA_SCRAPE_URL,
       {
         input: [{ url: linkedinUrl }],
@@ -150,13 +164,28 @@ export async function scrapeLinkedInProfile(linkedinUrl: string): Promise<Bright
           include_errors: true,
         },
         timeout: 150000, // 2.5 minute timeout (profiles take ~90 seconds)
+        // Request raw text to handle NDJSON format
+        responseType: 'text',
+        transformResponse: [(data) => data],
       }
     );
 
-    // BrightData can return either an array or a single object
-    // Normalize to always return an array
-    const data = response.data;
-    return Array.isArray(data) ? data : [data];
+    // BrightData returns NDJSON (newline-delimited JSON) - parse each line
+    const rawData = response.data as string;
+    const profiles: BrightDataLinkedInProfile[] = [];
+
+    const lines = rawData.split('\n').filter(line => line.trim());
+    for (const line of lines) {
+      try {
+        const profile = JSON.parse(line) as BrightDataLinkedInProfile;
+        profiles.push(profile);
+      } catch (parseError) {
+        console.warn('[BrightData] Failed to parse profile line:', line.substring(0, 100));
+      }
+    }
+
+    console.log(`[BrightData] Parsed ${profiles.length} profiles from NDJSON response`);
+    return profiles;
   } catch (error) {
     console.error('BrightData profile scrape error:', error);
     if (axios.isAxiosError(error)) {
