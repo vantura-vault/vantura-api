@@ -24,6 +24,21 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Extract post ID from LinkedIn post URL
+ * Example: https://www.linkedin.com/posts/openai_...activity-7400624294864801792-xxx
+ */
+function extractPostIdFromUrl(url: string): string | null {
+  if (!url) return null;
+  // Match activity ID from URL (e.g., activity-7400624294864801792)
+  const activityMatch = url.match(/activity-(\d+)/);
+  if (activityMatch) return activityMatch[1];
+  // Match URN format (e.g., urn:li:activity:7400624294864801792)
+  const urnMatch = url.match(/urn:li:activity:(\d+)/);
+  if (urnMatch) return urnMatch[1];
+  return null;
+}
+
+/**
  * Determine the discover_by type based on URL
  */
 function getDiscoverType(url: string): 'company_url' | 'profile_url' {
@@ -67,12 +82,21 @@ async function storePosts(
 
   for (const post of posts) {
     try {
+      // Extract post ID - BrightData may use different field names
+      // Try: id, post_id, or extract from URL
+      const postId = post.id || (post as unknown as { post_id?: string }).post_id || extractPostIdFromUrl(post.url);
+
+      if (!postId) {
+        console.error(`[AsyncScraper] Cannot determine post ID. Post data:`, JSON.stringify(post, null, 2));
+        continue;
+      }
+
       // Check if post already exists
       const existingPost = await prisma.post.findUnique({
         where: {
           platformId_platformPostId: {
             platformId,
-            platformPostId: post.id,
+            platformPostId: postId,
           },
         },
       });
@@ -94,7 +118,7 @@ async function storePosts(
         data: {
           companyId: competitorId,
           platformId,
-          platformPostId: post.id,
+          platformPostId: postId,
           captionText: post.post_text || null,
           postUrl: post.url,
           mediaType: determineMediaType(post),
@@ -113,7 +137,7 @@ async function storePosts(
 
       storedCount++;
     } catch (error) {
-      console.error(`[AsyncScraper] Failed to store post ${post.id}:`, error);
+      console.error(`[AsyncScraper] Failed to store post ${post.url}:`, error);
       // Continue with other posts
     }
   }
