@@ -3,6 +3,8 @@ import {
   scrapeLinkedInCompany,
   extractLinkedInCompanySlug,
 } from './brightdata.js';
+import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
+import { triggerAsyncScrape } from './asyncScraper.js';
 
 export interface AddCompetitorViaLinkedInInput {
   companyId: string; // The user's company adding the competitor
@@ -254,6 +256,33 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
     },
   });
 
+  // Trigger async post scrape (only if no pending job exists)
+  let scrapeJobId: string | null = null;
+  const existingJob = await getPendingScrapeJobForTarget(companyId, competitorId);
+
+  if (!existingJob) {
+    try {
+      const scrapeJob = await createScrapeJob({
+        companyId,
+        targetId: competitorId,
+        targetUrl: companyData.url || linkedinUrl,
+        platform: 'LinkedIn',
+        scrapeType: 'posts',
+      });
+      scrapeJobId = scrapeJob.id;
+
+      // Trigger async scrape in background
+      triggerAsyncScrape(scrapeJob.id);
+      console.log(`[LinkedIn] Triggered async post scrape job: ${scrapeJob.id}`);
+    } catch (error) {
+      console.error('[LinkedIn] Failed to create scrape job:', error);
+      // Don't fail the whole operation if scrape job creation fails
+    }
+  } else {
+    console.log(`[LinkedIn] Pending scrape job already exists: ${existingJob.id}`);
+    scrapeJobId = existingJob.id;
+  }
+
   return {
     id: competitorId,
     name: competitor!.name,
@@ -263,5 +292,6 @@ export async function addCompetitorViaLinkedIn(input: AddCompetitorViaLinkedInIn
     linkedinUrl: companyData.url || linkedinUrl,
     followers: followerCount,
     postsImported: postCount,
+    scrapeJobId, // Include the scrape job ID in response
   };
 }

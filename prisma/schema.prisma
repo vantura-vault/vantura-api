@@ -71,6 +71,8 @@ model Company {
   relatedTo         CompanyRelationship[] @relation("CompanyB")
   platformSnapshots PlatformSnapshot[]
   blueprints        Blueprint[]
+  initiatedScrapeJobs ScrapeJob[] @relation("InitiatedJobs")
+  targetedScrapeJobs  ScrapeJob[] @relation("TargetedJobs")
 
   @@map("companies")
 }
@@ -283,6 +285,41 @@ model Blueprint {
   @@index([platform])
   @@index([createdAt])
   @@map("blueprints")
+}
+
+// ============================================
+// SCRAPE JOBS (Async Post Scraping)
+// ============================================
+
+model ScrapeJob {
+  id            String    @id @default(cuid())
+  companyId     String    // User's company that initiated the scrape
+  targetId      String    // Competitor company being scraped
+  targetUrl     String    // LinkedIn URL being scraped
+  platform      String    // "LinkedIn", "Twitter", etc.
+  scrapeType    String    // "company" | "profile" | "posts"
+
+  // Job status
+  status        String    @default("pending") // pending, in_progress, completed, failed
+  progress      Int       @default(0)         // 0-100
+  errorMessage  String?   @db.Text
+
+  // Results
+  postsScraped  Int       @default(0)
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  // Relations
+  initiatingCompany Company @relation("InitiatedJobs", fields: [companyId], references: [id], onDelete: Cascade)
+  targetCompany     Company @relation("TargetedJobs", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([targetId])
+  @@index([status])
+  @@map("scrape_jobs")
 }
 
 // ============================================
