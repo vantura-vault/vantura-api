@@ -209,139 +209,22 @@ export const vaultService = {
           }
         });
 
-        // Create initial snapshot with follower count (from input, BrightData, or 0)
-        const postCount = (brightDataCompanyData?.updates?.length || 0) + (brightDataProfileData?.posts?.length || 0);
+        // Create initial snapshot with follower count (posts will come from async Posts API)
         await prisma.platformSnapshot.create({
           data: {
             companyId: competitorCompany.id,
             platformId: companyPlatform.id,
             followerCount,
-            postCount,
+            postCount: 0, // Posts will be populated by the Posts Discovery API
             capturedAt: new Date()
           }
         });
 
-        // If BrightData returned company posts, create Post and PostAnalysis records
-        if (brightDataCompanyData?.updates && brightDataCompanyData.updates.length > 0) {
-          console.log(`💾 Storing ${brightDataCompanyData.updates.length} company posts with engagement data...`);
+        // Note: We intentionally do NOT save posts from the Company/Profile APIs here.
+        // Posts are fetched separately via the Posts Discovery API (async scraper)
+        // to get more comprehensive and accurate post data.
 
-          for (const update of brightDataCompanyData.updates) {
-            try {
-              // Create the post
-              const post = await prisma.post.create({
-                data: {
-                  companyId: competitorCompany.id,
-                  platformId: platform.id,
-                  captionText: update.text || update.title || '',
-                  postedAt: new Date(update.date || update.time),
-                  platformPostId: update.post_id,
-                  postUrl: update.post_url,
-                  mediaType: update.images?.length ? 'image' : (update.videos?.length ? 'video' : 'text'),
-                }
-              });
-
-              // Calculate engagement metrics
-              const totalEngagement = (update.likes_count || 0) + (update.comments_count || 0);
-              const impressions = followerCount > 0 ? followerCount : 1000; // Estimate impressions as follower count
-
-              // Create post analysis
-              await prisma.postAnalysis.create({
-                data: {
-                  postId: post.id,
-                  modelVersion: 'brightdata-scrape-v1',
-                  impressions,
-                  engagement: totalEngagement,
-                  topics: [],
-                  summary: update.title || 'LinkedIn post',
-                  entities: [],
-                  captionSentiment: 0, // Neutral by default
-                  positiveDescription: '',
-                  imageDescription: '',
-                  negativeDescription: '',
-                }
-              });
-
-              // Create post snapshot for like/comment tracking
-              await prisma.postSnapshot.create({
-                data: {
-                  postId: post.id,
-                  likeCount: update.likes_count || 0,
-                  commentCount: update.comments_count || 0,
-                  capturedAt: new Date()
-                }
-              });
-
-              console.log(`  ✓ Stored post: ${update.post_id} (${totalEngagement} engagement)`);
-            } catch (postError) {
-              console.warn(`  ⚠️  Failed to store post ${update.post_id}:`, postError);
-              // Continue with next post
-            }
-          }
-
-          console.log(`✅ Successfully stored ${brightDataCompanyData.updates.length} company posts`);
-        }
-
-        // If BrightData returned profile posts, create Post and PostAnalysis records
-        if (brightDataProfileData?.posts && brightDataProfileData.posts.length > 0) {
-          console.log(`💾 Storing ${brightDataProfileData.posts.length} profile posts with engagement data...`);
-
-          for (const post of brightDataProfileData.posts) {
-            try {
-              // Create the post
-              const postRecord = await prisma.post.create({
-                data: {
-                  companyId: competitorCompany.id,
-                  platformId: platform.id,
-                  captionText: post.text || '',
-                  postedAt: new Date(post.date || post.time),
-                  platformPostId: post.post_id,
-                  postUrl: post.post_url,
-                  mediaType: post.images?.length ? 'image' : (post.videos?.length ? 'video' : 'text'),
-                }
-              });
-
-              // Calculate engagement metrics (include reposts if available)
-              const totalEngagement = (post.likes_count || 0) + (post.comments_count || 0) + (post.reposts_count || 0);
-              const impressions = followerCount > 0 ? followerCount : 1000; // Estimate impressions as follower/connection count
-
-              // Create post analysis
-              await prisma.postAnalysis.create({
-                data: {
-                  postId: postRecord.id,
-                  modelVersion: 'brightdata-profile-scrape-v1',
-                  impressions,
-                  engagement: totalEngagement,
-                  topics: [],
-                  summary: 'LinkedIn profile post',
-                  entities: [],
-                  captionSentiment: 0, // Neutral by default
-                  positiveDescription: '',
-                  imageDescription: '',
-                  negativeDescription: '',
-                }
-              });
-
-              // Create post snapshot for like/comment tracking
-              await prisma.postSnapshot.create({
-                data: {
-                  postId: postRecord.id,
-                  likeCount: post.likes_count || 0,
-                  commentCount: post.comments_count || 0,
-                  capturedAt: new Date()
-                }
-              });
-
-              console.log(`  ✓ Stored profile post: ${post.post_id} (${totalEngagement} engagement)`);
-            } catch (postError) {
-              console.warn(`  ⚠️  Failed to store profile post ${post.post_id}:`, postError);
-              // Continue with next post
-            }
-          }
-
-          console.log(`✅ Successfully stored ${brightDataProfileData.posts.length} profile posts`);
-        }
-
-        // Trigger async posts scrape for more comprehensive post data
+        // Trigger async posts scrape via Posts Discovery API
         const existingJob = await getPendingScrapeJobForTarget(companyId, competitorCompany.id);
         if (!existingJob && platformInput.url) {
           try {
