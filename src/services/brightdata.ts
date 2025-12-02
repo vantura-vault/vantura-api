@@ -272,12 +272,22 @@ export async function scrapeLinkedInPosts(
     throw new Error('BRIGHTDATA_API_KEY is not configured');
   }
 
+  console.log(`\n🌐 [BrightData Posts API] Request:`);
+  console.log(`   - URL: ${linkedinUrl}`);
+  console.log(`   - Discover by: ${discoverBy}`);
+  console.log(`   - Dataset ID: ${BRIGHTDATA_POSTS_DATASET_ID}`);
+
   try {
     // Build input based on discover type
     const input = discoverBy === 'profile_url' && dateRange
       ? [{ url: linkedinUrl, start_date: dateRange.startDate, end_date: dateRange.endDate }]
       : [{ url: linkedinUrl }];
 
+    console.log(`   - Input: ${JSON.stringify(input)}`);
+    console.log(`   - Timeout: 300000ms (5 min)`);
+    console.log(`   ⏳ Waiting for BrightData response...`);
+
+    const startTime = Date.now();
     const response = await axios.post(
       BRIGHTDATA_SCRAPE_URL,
       { input },
@@ -300,22 +310,30 @@ export async function scrapeLinkedInPosts(
       }
     );
 
+    const elapsed = Date.now() - startTime;
+    console.log(`\n✅ [BrightData Posts API] Response received in ${elapsed}ms`);
+
     // BrightData returns NDJSON (newline-delimited JSON) - parse each line
     const rawData = response.data as string;
+    console.log(`   - Raw response length: ${rawData.length} chars`);
+    console.log(`   - First 200 chars: ${rawData.substring(0, 200)}...`);
+
     const posts: BrightDataLinkedInPost[] = [];
 
     // Split by newlines and parse each JSON object
     const lines = rawData.split('\n').filter(line => line.trim());
+    console.log(`   - Lines in NDJSON: ${lines.length}`);
+
     for (const line of lines) {
       try {
         const post = JSON.parse(line) as BrightDataLinkedInPost;
         posts.push(post);
       } catch (parseError) {
-        console.warn('[BrightData] Failed to parse line:', line.substring(0, 100));
+        console.warn(`   ⚠️  Failed to parse line: ${line.substring(0, 100)}`);
       }
     }
 
-    console.log(`[BrightData] Parsed ${posts.length} posts from NDJSON response`);
+    console.log(`📊 [BrightData Posts API] Parsed ${posts.length} posts from NDJSON response`);
     return posts;
   } catch (error) {
     console.error('BrightData posts scrape error:', error);

@@ -88,25 +88,33 @@ async function storePosts(
   posts: BrightDataLinkedInPost[]
 ): Promise<number> {
   let storedCount = 0;
+  console.log(`\n📦 [StorePosts] Starting to store ${posts.length} posts for competitor ${competitorId}`);
 
-  for (const post of posts) {
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i];
+    console.log(`\n📝 [StorePosts] Processing post ${i + 1}/${posts.length}`);
+
     try {
       // Check if this is an async snapshot response instead of actual post data
       if (isAsyncSnapshotResponse(post)) {
-        console.warn(`[AsyncScraper] Skipping async snapshot response:`, (post as unknown as { snapshot_id: string }).snapshot_id);
+        console.warn(`  ⏳ Skipping async snapshot response:`, (post as unknown as { snapshot_id: string }).snapshot_id);
         continue;
       }
 
       // Extract post ID - BrightData may use different field names
       // Try: id, post_id, or extract from URL
       const postId = post.id || (post as unknown as { post_id?: string }).post_id || extractPostIdFromUrl(post.url);
+      console.log(`  🔑 Post ID: ${postId || 'NOT FOUND'}`);
+      console.log(`  🔗 URL: ${post.url?.substring(0, 80)}...`);
+      console.log(`  📅 Date: ${post.date_posted}`);
 
       if (!postId) {
-        console.error(`[AsyncScraper] Cannot determine post ID. Post data:`, JSON.stringify(post, null, 2));
+        console.error(`  ❌ Cannot determine post ID. Raw post data:`, JSON.stringify(post, null, 2).substring(0, 500));
         continue;
       }
 
       // Check if post already exists
+      console.log(`  🔍 Checking if post exists in DB...`);
       const existingPost = await prisma.post.findUnique({
         where: {
           platformId_platformPostId: {
@@ -117,6 +125,7 @@ async function storePosts(
       });
 
       if (existingPost) {
+        console.log(`  ⏭️  Post already exists (${existingPost.id}), updating snapshot`);
         // Update metrics with a new snapshot
         await prisma.postSnapshot.create({
           data: {
@@ -129,6 +138,11 @@ async function storePosts(
       }
 
       // Create new post
+      console.log(`  ✨ Creating new post record...`);
+      console.log(`    - Caption: ${post.post_text?.substring(0, 60) || 'null'}...`);
+      console.log(`    - Media type: ${determineMediaType(post)}`);
+      console.log(`    - Likes: ${post.num_likes}, Comments: ${post.num_comments}`);
+
       const createdPost = await prisma.post.create({
         data: {
           companyId: competitorId,
@@ -140,6 +154,7 @@ async function storePosts(
           postedAt: new Date(post.date_posted),
         },
       });
+      console.log(`  ✅ Post created: ${createdPost.id}`);
 
       // Create initial snapshot
       await prisma.postSnapshot.create({
@@ -149,6 +164,7 @@ async function storePosts(
           commentCount: post.num_comments || 0,
         },
       });
+      console.log(`  ✅ PostSnapshot created`);
 
       // Create post analysis for engagement calculation
       const totalEngagement = (post.num_likes || 0) + (post.num_comments || 0);
@@ -169,14 +185,16 @@ async function storePosts(
           negativeDescription: '',
         },
       });
+      console.log(`  ✅ PostAnalysis created (engagement: ${totalEngagement}, impressions: ${impressions})`);
 
       storedCount++;
     } catch (error) {
-      console.error(`[AsyncScraper] Failed to store post ${post.url}:`, error);
+      console.error(`  ❌ Failed to store post:`, error);
       // Continue with other posts
     }
   }
 
+  console.log(`\n📊 [StorePosts] Finished. Stored ${storedCount} new posts out of ${posts.length} total`);
   return storedCount;
 }
 
@@ -216,6 +234,10 @@ async function executeWithRetry(
  * This function runs in the background and emits WebSocket events
  */
 export async function startAsyncScrape(jobId: string): Promise<void> {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`🚀 [AsyncScraper] STARTING JOB: ${jobId}`);
+  console.log(`${'='.repeat(60)}`);
+
   const job = await prisma.scrapeJob.findUnique({
     where: { id: jobId },
     include: {
@@ -225,14 +247,17 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
   });
 
   if (!job) {
-    console.error(`[AsyncScraper] Job ${jobId} not found`);
+    console.error(`❌ [AsyncScraper] Job ${jobId} not found`);
     return;
   }
 
   const { companyId, targetId, targetUrl } = job;
   const targetName = job.targetCompany.name;
 
-  console.log(`[AsyncScraper] Starting scrape job ${jobId} for ${targetName}`);
+  console.log(`📋 Job Details:`);
+  console.log(`   - Target: ${targetName} (${targetId})`);
+  console.log(`   - URL: ${targetUrl}`);
+  console.log(`   - Initiating Company: ${companyId}`);
 
   try {
     // Mark job as started
@@ -256,19 +281,32 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
     });
 
     // Execute scrape with retries
+    console.log(`\n📡 [AsyncScraper] Calling BrightData Posts Discovery API...`);
     const allPosts = await executeWithRetry(jobId, companyId, () =>
       scrapeLinkedInPosts(targetUrl, discoverType)
     );
 
-    console.log(`[AsyncScraper] Received ${allPosts.length} items from BrightData`);
+    console.log(`\n📥 [AsyncScraper] BrightData Response:`);
+    console.log(`   - Total items received: ${allPosts.length}`);
+
+    // Log first post sample for debugging
+    if (allPosts.length > 0) {
+      const sample = allPosts[0];
+      console.log(`   - First item sample:`);
+      console.log(`     - id: ${sample.id || 'undefined'}`);
+      console.log(`     - url: ${sample.url?.substring(0, 60) || 'undefined'}...`);
+      console.log(`     - date_posted: ${sample.date_posted || 'undefined'}`);
+      console.log(`     - num_likes: ${sample.num_likes}`);
+      console.log(`     - snapshot_id: ${(sample as unknown as { snapshot_id?: string }).snapshot_id || 'none'}`);
+    }
 
     // Check if BrightData returned async snapshot responses instead of actual data
     const asyncSnapshots = allPosts.filter(p => isAsyncSnapshotResponse(p));
     if (asyncSnapshots.length > 0) {
-      console.warn(`[AsyncScraper] ${asyncSnapshots.length} async snapshot responses detected (data not immediately available)`);
+      console.warn(`\n⚠️  [AsyncScraper] ${asyncSnapshots.length} async snapshot responses detected`);
       if (asyncSnapshots.length === allPosts.length) {
         // All responses are async snapshots - no immediate data available
-        console.warn(`[AsyncScraper] All responses are async snapshots - marking job as pending`);
+        console.warn(`❌ [AsyncScraper] ALL responses are async snapshots - no data available`);
         await markJobFailed(jobId, 'BrightData returned async snapshot - data not immediately available. Please retry later.');
         emitToCompany(companyId, 'scrape:failed', {
           jobId,
@@ -281,7 +319,7 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
 
     // Filter out async snapshot responses to get actual posts
     const validPosts = allPosts.filter(p => !isAsyncSnapshotResponse(p));
-    console.log(`[AsyncScraper] ${validPosts.length} valid posts after filtering async snapshots`);
+    console.log(`\n✅ [AsyncScraper] Valid posts after filtering: ${validPosts.length}`);
 
     // Sort by date (most recent first) and take only the 20 most recent
     const MAX_POSTS = 20;
