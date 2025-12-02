@@ -127,19 +127,28 @@ export const vaultService = {
           try {
             console.log(`🔍 Scraping LinkedIn company data for: ${platformInput.url}`);
             const brightDataResults = await scrapeLinkedInCompany(platformInput.url);
+            console.log(`🔍 BrightData company response:`, JSON.stringify(brightDataResults[0], null, 2).substring(0, 500));
             if (brightDataResults && brightDataResults.length > 0) {
               brightDataCompanyData = brightDataResults[0];
-              followerCount = brightDataCompanyData.followers || 0;
-              console.log(`✅ Scraped follower count: ${followerCount}`);
-              console.log(`✅ Scraped ${brightDataCompanyData.updates?.length || 0} posts`);
 
-              // Update company logo if available
-              if (brightDataCompanyData.logo) {
-                await prisma.company.update({
-                  where: { id: competitorCompany.id },
-                  data: { profilePictureUrl: brightDataCompanyData.logo }
-                });
-                console.log(`✅ Updated company logo: ${brightDataCompanyData.logo}`);
+              // Check for async snapshot response - skip if BrightData is still processing
+              if ((brightDataCompanyData as unknown as { snapshot_id?: string }).snapshot_id) {
+                console.warn(`⚠️  BrightData returned async snapshot, data not immediately available`);
+                console.warn(`⚠️  Snapshot ID: ${(brightDataCompanyData as unknown as { snapshot_id: string }).snapshot_id}`);
+                brightDataCompanyData = null; // Reset to avoid using invalid data
+              } else {
+                followerCount = brightDataCompanyData.followers || 0;
+                console.log(`✅ Scraped follower count: ${followerCount}`);
+                console.log(`✅ Scraped ${brightDataCompanyData.updates?.length || 0} posts`);
+
+                // Update company logo if available
+                if (brightDataCompanyData.logo) {
+                  await prisma.company.update({
+                    where: { id: competitorCompany.id },
+                    data: { profilePictureUrl: brightDataCompanyData.logo }
+                  });
+                  console.log(`✅ Updated company logo: ${brightDataCompanyData.logo}`);
+                }
               }
             }
           } catch (error) {
@@ -157,17 +166,25 @@ export const vaultService = {
             console.log(`🔍 BrightData raw response:`, JSON.stringify(brightDataResults, null, 2));
             if (brightDataResults && brightDataResults.length > 0) {
               brightDataProfileData = brightDataResults[0];
-              followerCount = brightDataProfileData.followers || brightDataProfileData.connections || 0;
-              console.log(`✅ Scraped followers/connections: ${followerCount}`);
-              console.log(`✅ Scraped ${brightDataProfileData.posts?.length || 0} posts`);
 
-              // Update company logo with profile picture if available
-              if (brightDataProfileData.avatar) {
-                await prisma.company.update({
-                  where: { id: competitorCompany.id },
-                  data: { profilePictureUrl: brightDataProfileData.avatar }
-                });
-                console.log(`✅ Updated profile picture: ${brightDataProfileData.avatar}`);
+              // Check for async snapshot response - skip if BrightData is still processing
+              if ((brightDataProfileData as unknown as { snapshot_id?: string }).snapshot_id) {
+                console.warn(`⚠️  BrightData returned async snapshot for profile, data not immediately available`);
+                console.warn(`⚠️  Snapshot ID: ${(brightDataProfileData as unknown as { snapshot_id: string }).snapshot_id}`);
+                brightDataProfileData = null; // Reset to avoid using invalid data
+              } else {
+                followerCount = brightDataProfileData.followers || brightDataProfileData.connections || 0;
+                console.log(`✅ Scraped followers/connections: ${followerCount}`);
+                console.log(`✅ Scraped ${brightDataProfileData.posts?.length || 0} posts`);
+
+                // Update company logo with profile picture if available
+                if (brightDataProfileData.avatar) {
+                  await prisma.company.update({
+                    where: { id: competitorCompany.id },
+                    data: { profilePictureUrl: brightDataProfileData.avatar }
+                  });
+                  console.log(`✅ Updated profile picture: ${brightDataProfileData.avatar}`);
+                }
               }
             }
           } catch (error) {

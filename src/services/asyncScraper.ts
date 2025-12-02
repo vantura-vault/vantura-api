@@ -71,6 +71,15 @@ function determineMediaType(post: BrightDataLinkedInPost): string {
 }
 
 /**
+ * Check if the response is an async snapshot response instead of actual data
+ */
+function isAsyncSnapshotResponse(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  const obj = data as Record<string, unknown>;
+  return 'snapshot_id' in obj && typeof obj.snapshot_id === 'string';
+}
+
+/**
  * Store scraped posts in the database
  */
 async function storePosts(
@@ -82,6 +91,12 @@ async function storePosts(
 
   for (const post of posts) {
     try {
+      // Check if this is an async snapshot response instead of actual post data
+      if (isAsyncSnapshotResponse(post)) {
+        console.warn(`[AsyncScraper] Skipping async snapshot response:`, (post as unknown as { snapshot_id: string }).snapshot_id);
+        continue;
+      }
+
       // Extract post ID - BrightData may use different field names
       // Try: id, post_id, or extract from URL
       const postId = post.id || (post as unknown as { post_id?: string }).post_id || extractPostIdFromUrl(post.url);
@@ -245,11 +260,32 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
       scrapeLinkedInPosts(targetUrl, discoverType)
     );
 
-    console.log(`[AsyncScraper] Received ${allPosts.length} posts from BrightData`);
+    console.log(`[AsyncScraper] Received ${allPosts.length} items from BrightData`);
+
+    // Check if BrightData returned async snapshot responses instead of actual data
+    const asyncSnapshots = allPosts.filter(p => isAsyncSnapshotResponse(p));
+    if (asyncSnapshots.length > 0) {
+      console.warn(`[AsyncScraper] ${asyncSnapshots.length} async snapshot responses detected (data not immediately available)`);
+      if (asyncSnapshots.length === allPosts.length) {
+        // All responses are async snapshots - no immediate data available
+        console.warn(`[AsyncScraper] All responses are async snapshots - marking job as pending`);
+        await markJobFailed(jobId, 'BrightData returned async snapshot - data not immediately available. Please retry later.');
+        emitToCompany(companyId, 'scrape:failed', {
+          jobId,
+          targetId,
+          error: 'Posts data is being processed by BrightData. Please try again in a few minutes.',
+        });
+        return;
+      }
+    }
+
+    // Filter out async snapshot responses to get actual posts
+    const validPosts = allPosts.filter(p => !isAsyncSnapshotResponse(p));
+    console.log(`[AsyncScraper] ${validPosts.length} valid posts after filtering async snapshots`);
 
     // Sort by date (most recent first) and take only the 20 most recent
     const MAX_POSTS = 20;
-    const posts = allPosts
+    const posts = validPosts
       .sort((a, b) => new Date(b.date_posted).getTime() - new Date(a.date_posted).getTime())
       .slice(0, MAX_POSTS);
 
