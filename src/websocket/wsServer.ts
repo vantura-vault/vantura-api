@@ -8,6 +8,12 @@ let io: SocketServer | null = null;
  * WebSocket event types for type safety
  */
 export interface ScrapeEvents {
+  'scrape:scheduled': {
+    jobId: string;
+    targetId: string;
+    targetName: string;
+    delaySeconds: number;
+  };
   'scrape:started': {
     jobId: string;
     targetId: string;

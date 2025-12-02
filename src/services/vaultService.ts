@@ -2,6 +2,7 @@ import { prisma } from '../db.js';
 import { scrapeLinkedInCompany, scrapeLinkedInProfile, type BrightDataLinkedInProfile } from './brightdata.js';
 import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
 import { triggerAsyncScrape } from './asyncScraper.js';
+import { emitToCompany } from '../websocket/wsServer.js';
 
 interface AddCompetitorInput {
   companyId: string;
@@ -225,6 +226,8 @@ export const vaultService = {
         // to get more comprehensive and accurate post data.
 
         // Trigger async posts scrape via Posts Discovery API
+        // Add a delay to avoid rate-limiting from BrightData (they don't like rapid consecutive requests)
+        const POSTS_SCRAPE_DELAY_MS = 30000; // 30 second delay
         const existingJob = await getPendingScrapeJobForTarget(companyId, competitorCompany.id);
         if (!existingJob && platformInput.url) {
           try {
@@ -235,8 +238,22 @@ export const vaultService = {
               platform: platformInput.platform,
               scrapeType: platformInput.type === 'profile' ? 'profile' : 'company',
             });
-            triggerAsyncScrape(scrapeJob.id);
-            console.log(`🚀 [AsyncScrape] Triggered posts scrape job: ${scrapeJob.id} for ${platformInput.url}`);
+
+            // Delay the posts scrape to avoid BrightData rate limiting
+            console.log(`⏳ [AsyncScrape] Scheduling posts scrape job in ${POSTS_SCRAPE_DELAY_MS / 1000}s to avoid rate limiting...`);
+
+            // Notify frontend that posts scrape is scheduled
+            emitToCompany(companyId, 'scrape:scheduled', {
+              jobId: scrapeJob.id,
+              targetId: competitorCompany.id,
+              targetName: name,
+              delaySeconds: POSTS_SCRAPE_DELAY_MS / 1000,
+            });
+
+            setTimeout(() => {
+              console.log(`🚀 [AsyncScrape] Starting delayed posts scrape job: ${scrapeJob.id} for ${platformInput.url}`);
+              triggerAsyncScrape(scrapeJob.id);
+            }, POSTS_SCRAPE_DELAY_MS);
           } catch (scrapeError) {
             console.error(`⚠️ [AsyncScrape] Failed to create scrape job:`, scrapeError);
             // Don't fail the whole operation
