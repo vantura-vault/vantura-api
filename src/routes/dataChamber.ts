@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getSettings, updateSettings } from '../controllers/dataChamberController.js';
+import { getSettings, updateSettings, syncLinkedIn } from '../controllers/dataChamberController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
@@ -12,5 +12,8 @@ router.get('/settings', getSettings);
 
 // PUT /api/data-chamber/settings?companyId=xxx
 router.put('/settings', updateSettings);
+
+// POST /api/data-chamber/sync-linkedin
+router.post('/sync-linkedin', syncLinkedIn);
 
 export default router;

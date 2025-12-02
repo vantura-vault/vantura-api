@@ -3,20 +3,20 @@ import { z } from 'zod';
 import { dataChamberService } from '../services/dataChamberService.js';
 
 // Validation schemas
-const strategicGoalSchema = z.object({
-  label: z.string(),
-  current: z.number(),
-  target: z.number(),
-  unit: z.string().optional(),
-  achieved: z.boolean(),
-});
-
 const updateSettingsSchema = z.object({
   values: z.array(z.string()).optional(),
   brandVoice: z.string().optional(),
   targetAudience: z.string().optional(),
-  strategicGoals: z.array(strategicGoalSchema).optional(),
+  personalNotes: z.string().optional(),
   profilePictureUrl: z.string().optional(),
+  linkedInUrl: z.string().optional(),
+  linkedInType: z.string().optional(),
+});
+
+const syncLinkedInSchema = z.object({
+  companyId: z.string(),
+  url: z.string().url(),
+  type: z.enum(['profile', 'company']),
 });
 
 /**
@@ -92,6 +92,40 @@ export const updateSettings = async (req: Request, res: Response): Promise<void>
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to update settings',
+    });
+  }
+};
+
+/**
+ * POST /api/data-chamber/sync-linkedin
+ * Sync LinkedIn profile/company data
+ */
+export const syncLinkedIn = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const validationResult = syncLinkedInSchema.safeParse(req.body);
+
+    if (!validationResult.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid request data',
+        details: validationResult.error.issues,
+      });
+      return;
+    }
+
+    const { companyId, url, type } = validationResult.data;
+
+    const result = await dataChamberService.syncLinkedIn(companyId, url, type);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error syncing LinkedIn:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to sync LinkedIn data',
     });
   }
 };

@@ -57,9 +57,12 @@ model Company {
   values            String?  @db.Text // JSON array of core values
   brandVoice        String?  @db.Text
   targetAudience    String?  @db.Text
-  strategicGoals    String?  @db.Text // JSON array of goals with current/target metrics
+  strategicGoals    String?  @db.Text // JSON array of goals (deprecated)
+  personalNotes     String?  @db.Text // Free-form personal notes
   contentPriorities String?  @db.Text // JSON object: content style preferences (data-driven, storytelling, educational, etc.)
   profilePictureUrl String?  // Company profile picture/logo URL
+  linkedInUrl       String?  // LinkedIn profile or company page URL
+  linkedInType      String?  // 'profile' or 'company'
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

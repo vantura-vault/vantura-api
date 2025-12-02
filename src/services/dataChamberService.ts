@@ -1,19 +1,13 @@
 import { prisma } from '../db.js';
 
-interface StrategicGoal {
-  label: string;
-  current: number;
-  target: number;
-  unit?: string;
-  achieved: boolean;
-}
-
 interface DataChamberSettings {
   values: string[];
   brandVoice: string;
   targetAudience: string;
-  strategicGoals: StrategicGoal[];
+  personalNotes: string;
   profilePictureUrl?: string;
+  linkedInUrl?: string;
+  linkedInType?: string;
 }
 
 export const dataChamberService = {
@@ -27,8 +21,10 @@ export const dataChamberService = {
         values: true,
         brandVoice: true,
         targetAudience: true,
-        strategicGoals: true,
+        personalNotes: true,
         profilePictureUrl: true,
+        linkedInUrl: true,
+        linkedInType: true,
       },
     });
 
@@ -40,14 +36,16 @@ export const dataChamberService = {
     const values = company.values ? JSON.parse(company.values) : [];
     const brandVoice = company.brandVoice || '';
     const targetAudience = company.targetAudience || '';
-    const strategicGoals = company.strategicGoals ? JSON.parse(company.strategicGoals) : [];
+    const personalNotes = company.personalNotes || '';
 
     return {
       values,
       brandVoice,
       targetAudience,
-      strategicGoals,
+      personalNotes,
       profilePictureUrl: company.profilePictureUrl || undefined,
+      linkedInUrl: company.linkedInUrl || undefined,
+      linkedInType: company.linkedInType || undefined,
     };
   },
 
@@ -70,11 +68,17 @@ export const dataChamberService = {
     if (settings.targetAudience !== undefined) {
       updateData.targetAudience = settings.targetAudience;
     }
-    if (settings.strategicGoals !== undefined) {
-      updateData.strategicGoals = JSON.stringify(settings.strategicGoals);
+    if (settings.personalNotes !== undefined) {
+      updateData.personalNotes = settings.personalNotes;
     }
     if (settings.profilePictureUrl !== undefined) {
       updateData.profilePictureUrl = settings.profilePictureUrl;
+    }
+    if (settings.linkedInUrl !== undefined) {
+      updateData.linkedInUrl = settings.linkedInUrl;
+    }
+    if (settings.linkedInType !== undefined) {
+      updateData.linkedInType = settings.linkedInType;
     }
 
     // Update company
@@ -85,8 +89,10 @@ export const dataChamberService = {
         values: true,
         brandVoice: true,
         targetAudience: true,
-        strategicGoals: true,
+        personalNotes: true,
         profilePictureUrl: true,
+        linkedInUrl: true,
+        linkedInType: true,
       },
     });
 
@@ -95,8 +101,64 @@ export const dataChamberService = {
       values: company.values ? JSON.parse(company.values) : [],
       brandVoice: company.brandVoice || '',
       targetAudience: company.targetAudience || '',
-      strategicGoals: company.strategicGoals ? JSON.parse(company.strategicGoals) : [],
+      personalNotes: company.personalNotes || '',
       profilePictureUrl: company.profilePictureUrl || undefined,
+      linkedInUrl: company.linkedInUrl || undefined,
+      linkedInType: company.linkedInType || undefined,
     };
+  },
+
+  /**
+   * Sync LinkedIn profile/company data and return profile picture
+   */
+  async syncLinkedIn(
+    companyId: string,
+    url: string,
+    type: 'profile' | 'company'
+  ): Promise<{ profilePictureUrl?: string; name?: string }> {
+    // Import BrightData scraper functions dynamically to avoid circular imports
+    const { scrapeLinkedInCompany, scrapeLinkedInProfile } = await import('./brightdata.js');
+
+    let profilePictureUrl: string | undefined;
+    let name: string | undefined;
+
+    try {
+      if (type === 'company') {
+        console.log(`🔍 [DataChamber] Syncing LinkedIn company: ${url}`);
+        const results = await scrapeLinkedInCompany(url);
+        if (results && results.length > 0) {
+          const data = results[0];
+          profilePictureUrl = data.logo;
+          name = data.name;
+          console.log(`✅ [DataChamber] Got company logo: ${profilePictureUrl}`);
+        }
+      } else {
+        console.log(`🔍 [DataChamber] Syncing LinkedIn profile: ${url}`);
+        const results = await scrapeLinkedInProfile(url);
+        if (results && results.length > 0) {
+          const data = results[0];
+          profilePictureUrl = data.avatar;
+          name = data.name;
+          console.log(`✅ [DataChamber] Got profile avatar: ${profilePictureUrl}`);
+        }
+      }
+
+      // Update company with the new data
+      if (profilePictureUrl) {
+        await prisma.company.update({
+          where: { id: companyId },
+          data: {
+            profilePictureUrl,
+            linkedInUrl: url,
+            linkedInType: type,
+          },
+        });
+      }
+
+      return { profilePictureUrl, name };
+    } catch (error) {
+      console.error(`❌ [DataChamber] Failed to sync LinkedIn:`, error);
+      throw error;
+    }
   },
 };
