@@ -66,19 +66,11 @@ export const vaultService = {
       });
 
       const totalFollowers = platforms.reduce((sum, p) => sum + p.followers, 0);
+      const postCount = competitor.posts.length;
 
-      // Calculate average engagement rate from posts with analytics
-      const postsWithAnalytics = competitor.posts.filter(post => post.analysis && post.analysis.impressions > 0);
       console.log(`📈 Posts for ${competitor.name}:`, {
-        totalPosts: competitor.posts.length,
-        postsWithAnalytics: postsWithAnalytics.length
+        totalPosts: postCount
       });
-      const averageEngagement = postsWithAnalytics.length > 0
-        ? postsWithAnalytics.reduce((sum, post) => {
-            const engagementRate = (post.analysis!.engagement / post.analysis!.impressions) * 100;
-            return sum + engagementRate;
-          }, 0) / postsWithAnalytics.length
-        : 0;
 
       return {
         id: competitor.id,
@@ -87,7 +79,7 @@ export const vaultService = {
         logoUrl: competitor.profilePictureUrl,
         platforms,
         totalFollowers,
-        averageEngagement
+        postCount
       };
     });
 
