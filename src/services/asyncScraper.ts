@@ -377,17 +377,30 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
         },
       });
 
-      // Get follower count from scraped data or existing snapshot
-      const followerCount = posts[0]?.user_followers || 0;
-
-      await prisma.platformSnapshot.create({
-        data: {
+      // Get the existing follower count from the most recent snapshot
+      // Don't overwrite with unreliable data from posts API
+      const existingSnapshot = await prisma.platformSnapshot.findFirst({
+        where: {
           companyId: targetId,
           platformId: companyPlatform.id,
-          followerCount,
-          postCount: totalPosts,
         },
+        orderBy: { capturedAt: 'desc' },
       });
+
+      const followerCount = existingSnapshot?.followerCount || 0;
+
+      // Only create a new snapshot if the post count changed
+      if (!existingSnapshot || existingSnapshot.postCount !== totalPosts) {
+        await prisma.platformSnapshot.create({
+          data: {
+            companyId: targetId,
+            platformId: companyPlatform.id,
+            followerCount, // Preserve existing follower count
+            postCount: totalPosts,
+          },
+        });
+        console.log(`✅ [AsyncScraper] Created snapshot with ${followerCount} followers, ${totalPosts} posts`);
+      }
     }
 
     // Mark job as completed
