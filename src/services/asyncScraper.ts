@@ -135,6 +135,26 @@ async function storePosts(
         },
       });
 
+      // Create post analysis for engagement calculation
+      const totalEngagement = (post.num_likes || 0) + (post.num_comments || 0);
+      const impressions = post.user_followers || 1000; // Use follower count as proxy for impressions
+
+      await prisma.postAnalysis.create({
+        data: {
+          postId: createdPost.id,
+          modelVersion: 'brightdata-posts-scrape-v1',
+          impressions,
+          engagement: totalEngagement,
+          topics: [],
+          summary: post.headline || post.title || 'LinkedIn post',
+          entities: [],
+          captionSentiment: 0,
+          positiveDescription: '',
+          imageDescription: '',
+          negativeDescription: '',
+        },
+      });
+
       storedCount++;
     } catch (error) {
       console.error(`[AsyncScraper] Failed to store post ${post.url}:`, error);
