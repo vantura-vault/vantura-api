@@ -110,17 +110,19 @@ export const dataChamberService = {
 
   /**
    * Sync LinkedIn profile/company data and return profile picture
+   * Also updates follower count in platform snapshots
    */
   async syncLinkedIn(
     companyId: string,
     url: string,
     type: 'profile' | 'company'
-  ): Promise<{ profilePictureUrl?: string; name?: string }> {
+  ): Promise<{ profilePictureUrl?: string; name?: string; followers?: number }> {
     // Import BrightData scraper functions dynamically to avoid circular imports
     const { scrapeLinkedInCompany, scrapeLinkedInProfile } = await import('./brightdata.js');
 
     let profilePictureUrl: string | undefined;
     let name: string | undefined;
+    let followers: number | undefined;
 
     try {
       if (type === 'company') {
@@ -130,7 +132,8 @@ export const dataChamberService = {
           const data = results[0];
           profilePictureUrl = data.logo;
           name = data.name;
-          console.log(`✅ [DataChamber] Got company logo: ${profilePictureUrl}`);
+          followers = data.followers;
+          console.log(`✅ [DataChamber] Got company data - logo: ${profilePictureUrl}, followers: ${followers}`);
         }
       } else {
         console.log(`🔍 [DataChamber] Syncing LinkedIn profile: ${url}`);
@@ -139,23 +142,83 @@ export const dataChamberService = {
           const data = results[0];
           profilePictureUrl = data.avatar;
           name = data.name;
-          console.log(`✅ [DataChamber] Got profile avatar: ${profilePictureUrl}`);
+          followers = data.followers || data.connections;
+          console.log(`✅ [DataChamber] Got profile data - avatar: ${profilePictureUrl}, followers: ${followers}`);
         }
       }
 
       // Update company with the new data
-      if (profilePictureUrl) {
+      if (profilePictureUrl || name) {
         await prisma.company.update({
           where: { id: companyId },
           data: {
-            profilePictureUrl,
+            ...(profilePictureUrl && { profilePictureUrl }),
+            ...(name && { name }),
             linkedInUrl: url,
             linkedInType: type,
           },
         });
       }
 
-      return { profilePictureUrl, name };
+      // Update platform snapshot with real follower count
+      if (followers && followers > 0) {
+        // Find or create LinkedIn platform
+        let linkedInPlatform = await prisma.platform.findUnique({
+          where: { name: 'LinkedIn' },
+        });
+
+        if (!linkedInPlatform) {
+          linkedInPlatform = await prisma.platform.create({
+            data: { name: 'LinkedIn' },
+          });
+        }
+
+        // Find or create company platform connection
+        let companyPlatform = await prisma.companyPlatform.findUnique({
+          where: {
+            companyId_platformId: {
+              companyId,
+              platformId: linkedInPlatform.id,
+            },
+          },
+        });
+
+        if (!companyPlatform) {
+          companyPlatform = await prisma.companyPlatform.create({
+            data: {
+              companyId,
+              platformId: linkedInPlatform.id,
+              profileUrl: url,
+            },
+          });
+        } else {
+          // Update the profile URL if it changed
+          await prisma.companyPlatform.update({
+            where: { id: companyPlatform.id },
+            data: { profileUrl: url },
+          });
+        }
+
+        // Get existing post count from latest snapshot (if any)
+        const existingSnapshot = await prisma.platformSnapshot.findFirst({
+          where: { platformId: companyPlatform.id },
+          orderBy: { capturedAt: 'desc' },
+        });
+
+        // Create new snapshot with real follower count
+        await prisma.platformSnapshot.create({
+          data: {
+            companyId,
+            platformId: companyPlatform.id,
+            followerCount: followers,
+            postCount: existingSnapshot?.postCount || 0,
+          },
+        });
+
+        console.log(`✅ [DataChamber] Created platform snapshot with ${followers} followers`);
+      }
+
+      return { profilePictureUrl, name, followers };
     } catch (error) {
       console.error(`❌ [DataChamber] Failed to sync LinkedIn:`, error);
       throw error;
