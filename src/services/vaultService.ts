@@ -370,17 +370,14 @@ export const vaultService = {
       throw new Error('Competitor relationship not found');
     }
 
-    // Delete the relationship
-    await prisma.companyRelationship.delete({
-      where: {
-        companyAId_companyBId: {
-          companyAId: companyId,
-          companyBId: competitorId
-        }
-      }
+    // Delete the competitor Company record
+    // This cascades to delete: Posts, PostAnalysis, PostSnapshots,
+    // CompanyPlatforms, PlatformSnapshots, CompanyRelationships, ScrapeJobs
+    await prisma.company.delete({
+      where: { id: competitorId }
     });
 
-    console.log('✅ Relationship deleted');
+    console.log('✅ Competitor and all related data deleted');
 
     return { success: true };
   }
