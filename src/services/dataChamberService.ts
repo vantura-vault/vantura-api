@@ -1,4 +1,9 @@
 import { prisma } from '../db.js';
+import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
+import { triggerAsyncScrape } from './asyncScraper.js';
+
+const POSTS_SCRAPE_DELAY_MS = 30000; // 30 second delay between profile and posts scrape
+const FRESHNESS_DAYS = 7; // Data is considered "fresh" if updated within this many days
 
 interface DataChamberSettings {
   values: string[];
@@ -8,6 +13,19 @@ interface DataChamberSettings {
   profilePictureUrl?: string;
   linkedInUrl?: string;
   linkedInType?: string;
+}
+
+interface DataHealthComponent {
+  name: string;
+  complete: boolean;
+  weight: number;
+  details?: string;
+}
+
+interface DataHealthResult {
+  score: number;
+  status: 'excellent' | 'good' | 'fair' | 'needs_attention';
+  components: DataHealthComponent[];
 }
 
 export const dataChamberService = {
@@ -216,6 +234,32 @@ export const dataChamberService = {
         });
 
         console.log(`✅ [DataChamber] Created platform snapshot with ${followers} followers`);
+
+        // Schedule async posts scrape with 30s delay to avoid rate limiting
+        const existingJob = await getPendingScrapeJobForTarget(companyId, companyId);
+        if (!existingJob) {
+          try {
+            const scrapeJob = await createScrapeJob({
+              companyId,
+              targetId: companyId, // Self-scraping: target is the company itself
+              targetUrl: url,
+              platform: 'LinkedIn',
+              scrapeType: type,
+            });
+
+            console.log(`⏳ [DataChamber] Scheduling posts scrape in ${POSTS_SCRAPE_DELAY_MS / 1000}s...`);
+
+            setTimeout(() => {
+              console.log(`🚀 [DataChamber] Starting delayed posts scrape job: ${scrapeJob.id}`);
+              triggerAsyncScrape(scrapeJob.id);
+            }, POSTS_SCRAPE_DELAY_MS);
+          } catch (scrapeError) {
+            console.error(`⚠️ [DataChamber] Failed to create scrape job:`, scrapeError);
+            // Don't fail the whole operation - profile/followers already synced
+          }
+        } else {
+          console.log(`⏭️ [DataChamber] Posts scrape already pending, skipping`);
+        }
       }
 
       return { profilePictureUrl, name, followers };
@@ -223,5 +267,140 @@ export const dataChamberService = {
       console.error(`❌ [DataChamber] Failed to sync LinkedIn:`, error);
       throw error;
     }
+  },
+
+  /**
+   * Calculate data health score for a company
+   * Returns a score from 0-100 based on data completeness and freshness
+   */
+  async calculateDataHealth(companyId: string): Promise<DataHealthResult> {
+    const components: DataHealthComponent[] = [];
+    const freshnessDate = new Date();
+    freshnessDate.setDate(freshnessDate.getDate() - FRESHNESS_DAYS);
+
+    // 1. Profile Complete (20%) - has picture, name, LinkedIn URL
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        name: true,
+        profilePictureUrl: true,
+        linkedInUrl: true,
+        linkedInType: true,
+        values: true,
+        brandVoice: true,
+        targetAudience: true,
+      },
+    });
+
+    if (!company) {
+      throw new Error('Company not found');
+    }
+
+    const hasProfilePicture = !!company.profilePictureUrl;
+    const hasLinkedIn = !!company.linkedInUrl;
+    const profileComplete = hasProfilePicture && hasLinkedIn;
+
+    components.push({
+      name: 'Profile',
+      complete: profileComplete,
+      weight: 20,
+      details: !profileComplete
+        ? `Missing: ${!hasProfilePicture ? 'profile picture' : ''}${!hasProfilePicture && !hasLinkedIn ? ', ' : ''}${!hasLinkedIn ? 'LinkedIn URL' : ''}`
+        : undefined,
+    });
+
+    // 2. Brand Identity (20%) - has values, brand voice, target audience
+    const values = company.values ? JSON.parse(company.values) : [];
+    const hasValues = values.length > 0;
+    const hasBrandVoice = !!company.brandVoice && company.brandVoice.length > 10;
+    const hasTargetAudience = !!company.targetAudience && company.targetAudience.length > 10;
+    const brandComplete = hasValues && hasBrandVoice && hasTargetAudience;
+
+    components.push({
+      name: 'Brand Identity',
+      complete: brandComplete,
+      weight: 20,
+      details: !brandComplete
+        ? `Missing: ${!hasValues ? 'core values' : ''}${!hasValues && !hasBrandVoice ? ', ' : ''}${!hasBrandVoice ? 'brand voice' : ''}${(!hasValues || !hasBrandVoice) && !hasTargetAudience ? ', ' : ''}${!hasTargetAudience ? 'target audience' : ''}`
+        : undefined,
+    });
+
+    // 3. Platform Connected (20%) - has recent snapshot
+    const latestSnapshot = await prisma.platformSnapshot.findFirst({
+      where: { companyId },
+      orderBy: { capturedAt: 'desc' },
+    });
+
+    const platformFresh = latestSnapshot && latestSnapshot.capturedAt >= freshnessDate;
+
+    components.push({
+      name: 'Platform Data',
+      complete: !!platformFresh,
+      weight: 20,
+      details: !platformFresh
+        ? latestSnapshot
+          ? `Last synced ${Math.floor((Date.now() - latestSnapshot.capturedAt.getTime()) / (1000 * 60 * 60 * 24))} days ago`
+          : 'No platform data synced'
+        : undefined,
+    });
+
+    // 4. Posts Synced (20%) - has posts in database
+    const postsCount = await prisma.post.count({
+      where: { companyId },
+    });
+
+    const recentPostsCount = await prisma.post.count({
+      where: {
+        companyId,
+        postedAt: { gte: freshnessDate },
+      },
+    });
+
+    const postsComplete = postsCount > 0;
+
+    components.push({
+      name: 'Posts',
+      complete: postsComplete,
+      weight: 20,
+      details: !postsComplete
+        ? 'No posts synced - sync LinkedIn to fetch posts'
+        : `${postsCount} posts tracked (${recentPostsCount} from last ${FRESHNESS_DAYS} days)`,
+    });
+
+    // 5. Competitors Tracked (20%) - at least 1 competitor
+    const competitorCount = await prisma.companyRelationship.count({
+      where: {
+        companyAId: companyId,
+        relationshipType: 'competitor',
+      },
+    });
+
+    const competitorsComplete = competitorCount > 0;
+
+    components.push({
+      name: 'Competitors',
+      complete: competitorsComplete,
+      weight: 20,
+      details: competitorsComplete
+        ? `${competitorCount} competitor${competitorCount > 1 ? 's' : ''} tracked`
+        : 'No competitors tracked',
+    });
+
+    // Calculate total score
+    const score = components.reduce((total, c) => total + (c.complete ? c.weight : 0), 0);
+
+    // Determine status
+    let status: DataHealthResult['status'];
+    if (score >= 100) {
+      status = 'excellent';
+    } else if (score >= 80) {
+      status = 'good';
+    } else if (score >= 60) {
+      status = 'fair';
+    } else {
+      status = 'needs_attention';
+    }
+
+    return { score, status, components };
   },
 };

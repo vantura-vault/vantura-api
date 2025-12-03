@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { authService } from '../services/auth.js';
+import { dataChamberService } from '../services/dataChamberService.js';
+import { prisma } from '../db.js';
 import { ApiResponse } from '../types/index.js';
 
 export const authController = {
@@ -57,11 +59,36 @@ export const authController = {
 
       const response: ApiResponse = {
         success: true,
-        data: result, 
+        data: result,
         message: 'Login successful'
       };
 
       res.json(response);
+
+      // Trigger background LinkedIn sync if configured (non-blocking)
+      if (result.user.companyId) {
+        setImmediate(async () => {
+          try {
+            const company = await prisma.company.findUnique({
+              where: { id: result.user.companyId! },
+              select: { linkedInUrl: true, linkedInType: true }
+            });
+
+            if (company?.linkedInUrl && company?.linkedInType) {
+              console.log(`🔄 [Auth] Background sync for ${result.user.email}'s company LinkedIn...`);
+              await dataChamberService.syncLinkedIn(
+                result.user.companyId!,
+                company.linkedInUrl,
+                company.linkedInType as 'profile' | 'company'
+              );
+              console.log(`✅ [Auth] Background LinkedIn sync complete`);
+            }
+          } catch (syncError) {
+            console.error(`⚠️ [Auth] Background LinkedIn sync failed:`, syncError);
+            // Don't throw - this is non-blocking
+          }
+        });
+      }
     } catch (error){
       console.error('Login error:', error);
       res.status(401).json({

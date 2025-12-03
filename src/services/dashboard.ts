@@ -139,16 +139,26 @@ export const dashboardService = {
       0
     );
 
-    // Calculate total follower growth from oldest to newest
-    const totalOldestFollowers = platformStats.reduce(
-      (sum, p) => sum + (p.oldest?.followers || 0),
+    // Calculate total follower growth from previous snapshot (not oldest)
+    // This shows the change since the last data sync
+    const totalFollowerGrowth = platformStats.reduce(
+      (sum, p) => sum + (p.growth?.followers.absolute || 0),
       0
     );
 
-    const totalFollowerGrowth = totalFollowers - totalOldestFollowers;
+    // Calculate percentage based on previous totals
+    const totalPreviousFollowers = platformStats.reduce(
+      (sum, p) => {
+        const current = p.current?.followers || 0;
+        const growth = p.growth?.followers.absolute || 0;
+        return sum + (current - growth);
+      },
+      0
+    );
+
     const totalFollowerGrowthPercent =
-      totalOldestFollowers > 0
-        ? (totalFollowerGrowth / totalOldestFollowers) * 100
+      totalPreviousFollowers > 0
+        ? (totalFollowerGrowth / totalPreviousFollowers) * 100
         : 0;
 
     // TODO: Refactor to use platform snapshots for better performance
@@ -228,12 +238,18 @@ export const dashboardService = {
     }
 
     // Calculate average engagement rate from posts
+    // Formula: (likes + comments) / followers * 100, averaged across posts
     const now = new Date();
     const thirtyDaysAgoDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const recentPosts = await prisma.post.findMany({
       where: { companyId },
-      include: { analysis: true },
+      include: {
+        metricsSnapshots: {
+          orderBy: { capturedAt: 'desc' },
+          take: 1 // Get latest snapshot for each post
+        }
+      },
       orderBy: { postedAt: 'desc' },
       take: 20 // Last 20 posts
     });
@@ -244,26 +260,32 @@ export const dashboardService = {
         companyId,
         postedAt: { lt: thirtyDaysAgoDate }
       },
-      include: { analysis: true },
+      include: {
+        metricsSnapshots: {
+          orderBy: { capturedAt: 'desc' },
+          take: 1
+        }
+      },
       orderBy: { postedAt: 'desc' },
       take: 20
     });
 
-    // Calculate recent engagement rate
-    let avgEngagementRate = 0;
-    if (recentPosts.length > 0) {
-      const totalReach = recentPosts.reduce((sum, p) => sum + (p.analysis?.impressions || 0), 0);
-      const totalEngagement = recentPosts.reduce((sum, p) => sum + (p.analysis?.engagement || 0), 0);
-      avgEngagementRate = totalReach > 0 ? (totalEngagement / totalReach) * 100 : 0;
-    }
+    // Helper to calculate engagement rate: (likes + comments) / followers * 100
+    const calculateEngagementRate = (posts: typeof recentPosts, followers: number): number => {
+      if (posts.length === 0 || followers === 0) return 0;
 
-    // Calculate older engagement rate for growth
-    let olderEngagementRate = 0;
-    if (olderPosts.length > 0) {
-      const totalReach = olderPosts.reduce((sum, p) => sum + (p.analysis?.impressions || 0), 0);
-      const totalEngagement = olderPosts.reduce((sum, p) => sum + (p.analysis?.engagement || 0), 0);
-      olderEngagementRate = totalReach > 0 ? (totalEngagement / totalReach) * 100 : 0;
-    }
+      const totalEngagement = posts.reduce((sum, p) => {
+        const snapshot = p.metricsSnapshots[0];
+        return sum + (snapshot?.likeCount || 0) + (snapshot?.commentCount || 0);
+      }, 0);
+
+      // Average engagement per post, then divide by followers
+      const avgEngagementPerPost = totalEngagement / posts.length;
+      return (avgEngagementPerPost / followers) * 100;
+    };
+
+    const avgEngagementRate = calculateEngagementRate(recentPosts, totalFollowers);
+    const olderEngagementRate = calculateEngagementRate(olderPosts, totalFollowers);
 
     const engagementGrowth = olderEngagementRate > 0
       ? ((avgEngagementRate - olderEngagementRate) / olderEngagementRate) * 100

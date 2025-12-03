@@ -129,3 +129,34 @@ export const syncLinkedIn = async (req: Request, res: Response): Promise<void> =
     });
   }
 };
+
+/**
+ * GET /api/data-chamber/health
+ * Get data health score and breakdown
+ */
+export const getDataHealth = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const companyId = req.query.companyId as string;
+
+    if (!companyId) {
+      res.status(400).json({
+        success: false,
+        error: 'companyId query parameter is required',
+      });
+      return;
+    }
+
+    const health = await dataChamberService.calculateDataHealth(companyId);
+
+    res.json({
+      success: true,
+      data: health,
+    });
+  } catch (error) {
+    console.error('Error calculating data health:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to calculate data health',
+    });
+  }
+};
