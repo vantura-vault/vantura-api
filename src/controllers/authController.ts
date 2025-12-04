@@ -5,15 +5,37 @@ import { prisma } from '../db.js';
 import { ApiResponse } from '../types/index.js';
 
 export const authController = {
-  // POST /api/auth/register
-  async register(req: Request, res:Response): Promise<void> {
-    try{
-      const { email, name, password, companyName, companyIndustry } = req.body;
+  /**
+   * POST /api/auth/register
+   * Register a new user with company LinkedIn URL
+   */
+  async register(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, name, password, companyName, companyIndustry, linkedInUrl, linkedInType } = req.body;
 
-      if (!email || !name || !password || !companyName || !companyIndustry){
+      // Validate required fields
+      if (!email || !name || !password || !companyName || !linkedInUrl || !linkedInType) {
         res.status(400).json({
           success: false,
-          error: "email, name, password, companyName, and companyIndustry are required"
+          error: 'Required fields: email, name, password, companyName, linkedInUrl, linkedInType'
+        });
+        return;
+      }
+
+      // Validate linkedInType
+      if (!['company', 'profile'].includes(linkedInType)) {
+        res.status(400).json({
+          success: false,
+          error: 'linkedInType must be "company" or "profile"'
+        });
+        return;
+      }
+
+      // Validate password strength (basic)
+      if (password.length < 8) {
+        res.status(400).json({
+          success: false,
+          error: 'Password must be at least 8 characters'
         });
         return;
       }
@@ -23,16 +45,37 @@ export const authController = {
         name,
         password,
         companyName,
-        companyIndustry
+        companyIndustry,
+        linkedInUrl,
+        linkedInType,
       });
 
       const response: ApiResponse = {
         success: true,
         data: result,
-        message: 'User registered successfully'
+        message: result.isNewCompany
+          ? 'Account created successfully. You are the owner of this company.'
+          : `Account created successfully. You have joined ${companyName} as a team member.`
       };
 
       res.status(201).json(response);
+
+      // Trigger background LinkedIn sync for new companies
+      if (result.isNewCompany && result.user.companyId) {
+        setImmediate(async () => {
+          try {
+            console.log(`🔄 [Auth] Background sync for new company LinkedIn...`);
+            await dataChamberService.syncLinkedIn(
+              result.user.companyId!,
+              linkedInUrl,
+              linkedInType
+            );
+            console.log(`✅ [Auth] Initial LinkedIn sync complete`);
+          } catch (syncError) {
+            console.error(`⚠️ [Auth] Initial LinkedIn sync failed:`, syncError);
+          }
+        });
+      }
     } catch (error) {
       console.error('Register error:', error);
       res.status(400).json({
@@ -42,9 +85,48 @@ export const authController = {
     }
   },
 
-  // POST /api/auth/login
-  async login(req: Request, res: Response): Promise<void>{
-    try{
+  /**
+   * POST /api/auth/check-linkedin
+   * Check if a LinkedIn URL is already registered (for form validation)
+   */
+  async checkLinkedIn(req: Request, res: Response): Promise<void> {
+    try {
+      const { linkedInUrl } = req.body;
+
+      if (!linkedInUrl) {
+        res.status(400).json({
+          success: false,
+          error: 'linkedInUrl is required'
+        });
+        return;
+      }
+
+      const result = await authService.checkLinkedInUrl(linkedInUrl);
+
+      res.json({
+        success: true,
+        data: {
+          exists: result.exists,
+          companyName: result.companyName,
+          message: result.exists
+            ? `This LinkedIn account is already registered to "${result.companyName}". You will join as a team member.`
+            : 'This LinkedIn account is not yet registered. You will be the company owner.'
+        }
+      });
+    } catch (error) {
+      console.error('Check LinkedIn error:', error);
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to check LinkedIn URL'
+      });
+    }
+  },
+
+  /**
+   * POST /api/auth/login
+   */
+  async login(req: Request, res: Response): Promise<void> {
+    try {
       const { email, password } = req.body;
 
       if (!email || !password) {
@@ -55,7 +137,7 @@ export const authController = {
         return;
       }
 
-      const result = await authService.login({email, password});
+      const result = await authService.login({ email, password });
 
       const response: ApiResponse = {
         success: true,
@@ -85,15 +167,14 @@ export const authController = {
             }
           } catch (syncError) {
             console.error(`⚠️ [Auth] Background LinkedIn sync failed:`, syncError);
-            // Don't throw - this is non-blocking
           }
         });
       }
-    } catch (error){
+    } catch (error) {
       console.error('Login error:', error);
       res.status(401).json({
         success: false,
-        error: 'invalid email or password'
+        error: 'Invalid email or password'
       });
     }
   },

@@ -18,12 +18,14 @@ export interface ApiResponse<T = any> {
 }
 
 // auth DTOs
-export interface RegisterDTO{
+export interface RegisterDTO {
   email: string;
   name: string;
   password: string;
   companyName: string;
-  companyIndustry: string;
+  companyIndustry?: string;
+  linkedInUrl: string; // Required: LinkedIn company/profile URL (unique identifier)
+  linkedInType: 'company' | 'profile'; // Type of LinkedIn page
 }
 
 export interface LoginDTO {
@@ -31,16 +33,17 @@ export interface LoginDTO {
   password: string;
 }
 
-export interface AuthResponseDTO{
-  user:{
+export interface AuthResponseDTO {
+  user: {
     id: string;
     email: string;
     name: string;
     companyId: string | null;
-    // role, tbd
+    role: string; // "owner", "admin", "member"
   };
   token: string;
   expiresAt: string;
+  isNewCompany: boolean; // True if user created a new company, false if joined existing
 }
 
 export interface CreateCompanyDTO{

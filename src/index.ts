@@ -11,7 +11,6 @@ import vaultRoutes from './routes/vault.js';
 import suggestionsRoutes from './routes/suggestions.js';
 import dataChamberRoutes from './routes/dataChamber.js';
 import blueprintRoutes from './routes/blueprint.js';
-import competitorLinkedInRoutes from './routes/competitorLinkedIn.js';
 import { initWebSocket } from './websocket/wsServer.js';
 
 const app = express();
@@ -32,7 +31,6 @@ app.use('/api/companies', companyRoutes);
 app.use('/api/snapshots', snapshotRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/competitors', competitorRoutes);
-app.use('/api/competitors/linkedin', competitorLinkedInRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/vault', vaultRoutes);
 app.use('/api/suggestions', suggestionsRoutes);

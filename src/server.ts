@@ -3,7 +3,6 @@ import { createServer } from 'http';
 import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import blueprintRoutes from './routes/blueprint.js';
-import competitorLinkedInRoutes from './routes/competitorLinkedIn.js';
 import vaultRoutes from './routes/vault.js';
 import { initWebSocket } from './websocket/wsServer.js';
 
@@ -23,7 +22,6 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/blueprints', blueprintRoutes);
-app.use('/api/competitors/linkedin', competitorLinkedInRoutes);
 app.use('/api/vault', vaultRoutes);
 
 app.get('/health', (_req, res) => {
