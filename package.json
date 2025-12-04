@@ -25,6 +25,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.4",
     "@types/node": "^24.9.1",
+    "@types/bcrypt": "^6.0.0",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
@@ -38,7 +39,6 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
     "eslint": "^9.37.0",
