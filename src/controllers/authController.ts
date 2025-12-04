@@ -149,26 +149,37 @@ export const authController = {
 
       // Trigger background LinkedIn sync if configured (non-blocking)
       if (result.user.companyId) {
+        console.log(`🔄 [Auth] Initiating background sync for company: ${result.user.companyId}`);
         setImmediate(async () => {
           try {
             const company = await prisma.company.findUnique({
               where: { id: result.user.companyId! },
-              select: { linkedInUrl: true, linkedInType: true }
+              select: { linkedInUrl: true, linkedInType: true, name: true }
+            });
+
+            console.log(`📋 [Auth] Company data:`, {
+              name: company?.name,
+              hasLinkedInUrl: !!company?.linkedInUrl,
+              linkedInType: company?.linkedInType
             });
 
             if (company?.linkedInUrl && company?.linkedInType) {
-              console.log(`🔄 [Auth] Background sync for ${result.user.email}'s company LinkedIn...`);
+              console.log(`🔄 [Auth] Starting LinkedIn sync for ${result.user.email} - ${company.linkedInUrl}`);
               await dataChamberService.syncLinkedIn(
                 result.user.companyId!,
                 company.linkedInUrl,
                 company.linkedInType as 'profile' | 'company'
               );
-              console.log(`✅ [Auth] Background LinkedIn sync complete`);
+              console.log(`✅ [Auth] Background LinkedIn sync complete for ${company.name}`);
+            } else {
+              console.log(`⏭️ [Auth] Skipping sync - no LinkedIn URL configured for company: ${company?.name}`);
             }
           } catch (syncError) {
             console.error(`⚠️ [Auth] Background LinkedIn sync failed:`, syncError);
           }
         });
+      } else {
+        console.log(`⏭️ [Auth] Skipping sync - user has no companyId`);
       }
     } catch (error) {
       console.error('Login error:', error);

@@ -34,6 +34,23 @@ export interface ScrapeEvents {
     targetId: string;
     error: string;
   };
+  // Competitor sync events
+  'competitor:added': {
+    competitorId: string;
+    name: string;
+    syncing: boolean;
+  };
+  'competitor:profileReady': {
+    competitorId: string;
+    name: string;
+    profilePictureUrl: string | null;
+    followers: number;
+  };
+  'competitor:syncFailed': {
+    competitorId: string;
+    name: string;
+    error: string;
+  };
 }
 
 /**

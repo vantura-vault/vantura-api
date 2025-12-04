@@ -135,8 +135,8 @@ export const dataChamberService = {
     url: string,
     type: 'profile' | 'company'
   ): Promise<{ profilePictureUrl?: string; name?: string; followers?: number }> {
-    // Import BrightData scraper functions dynamically to avoid circular imports
-    const { scrapeLinkedInCompany, scrapeLinkedInProfile } = await import('./brightdata.js');
+    // Import BrightData queue to avoid rate limiting
+    const { brightdataQueue } = await import('./brightdataQueue.js');
 
     let profilePictureUrl: string | undefined;
     let name: string | undefined;
@@ -144,8 +144,8 @@ export const dataChamberService = {
 
     try {
       if (type === 'company') {
-        console.log(`🔍 [DataChamber] Syncing LinkedIn company: ${url}`);
-        const results = await scrapeLinkedInCompany(url);
+        console.log(`🔍 [DataChamber] Queuing LinkedIn company sync: ${url}`);
+        const results = await brightdataQueue.scrapeCompany(url);
         if (results && results.length > 0) {
           const data = results[0];
           profilePictureUrl = data.logo;
@@ -154,8 +154,8 @@ export const dataChamberService = {
           console.log(`✅ [DataChamber] Got company data - logo: ${profilePictureUrl}, followers: ${followers}`);
         }
       } else {
-        console.log(`🔍 [DataChamber] Syncing LinkedIn profile: ${url}`);
-        const results = await scrapeLinkedInProfile(url);
+        console.log(`🔍 [DataChamber] Queuing LinkedIn profile sync: ${url}`);
+        const results = await brightdataQueue.scrapeProfile(url);
         if (results && results.length > 0) {
           const data = results[0];
           profilePictureUrl = data.avatar;

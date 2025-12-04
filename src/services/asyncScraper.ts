@@ -1,10 +1,10 @@
 import { prisma } from '../db.js';
 import {
-  scrapeLinkedInPosts,
   extractLinkedInCompanySlug,
   extractLinkedInProfileSlug,
   BrightDataLinkedInPost,
 } from './brightdata.js';
+import { brightdataQueue } from './brightdataQueue.js';
 import {
   markJobStarted,
   markJobCompleted,
@@ -280,10 +280,10 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
       message: 'Fetching posts from LinkedIn...',
     });
 
-    // Execute scrape with retries
-    console.log(`\n📡 [AsyncScraper] Calling BrightData Posts Discovery API...`);
+    // Execute scrape with retries (via queue to avoid rate limiting)
+    console.log(`\n📡 [AsyncScraper] Queuing BrightData Posts Discovery API call...`);
     const allPosts = await executeWithRetry(jobId, companyId, () =>
-      scrapeLinkedInPosts(targetUrl, discoverType)
+      brightdataQueue.scrapePosts(targetUrl, discoverType)
     );
 
     console.log(`\n📥 [AsyncScraper] BrightData Response:`);
