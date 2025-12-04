@@ -71,12 +71,32 @@ function determineMediaType(post: BrightDataLinkedInPost): string {
 }
 
 /**
- * Check if the response is an async snapshot response instead of actual data
+ * Check if the response is an async/not-ready response instead of actual data
+ * BrightData can return several "not ready" formats:
+ * 1. { snapshot_id: "...", message: "..." } - async snapshot
+ * 2. { status: "starting", message: "Snapshot is not ready yet..." } - starting
+ * 3. { error: "...", error_code: "..." } - error response
  */
 function isAsyncSnapshotResponse(data: unknown): boolean {
   if (!data || typeof data !== 'object') return false;
   const obj = data as Record<string, unknown>;
-  return 'snapshot_id' in obj && typeof obj.snapshot_id === 'string';
+
+  // Check for snapshot_id response
+  if ('snapshot_id' in obj && typeof obj.snapshot_id === 'string') {
+    return true;
+  }
+
+  // Check for "starting" status response
+  if ('status' in obj && obj.status === 'starting') {
+    return true;
+  }
+
+  // Check for error response (dead_page, etc.)
+  if ('error' in obj && 'error_code' in obj) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -291,13 +311,15 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
 
     // Log first post sample for debugging
     if (allPosts.length > 0) {
-      const sample = allPosts[0];
+      const sample = allPosts[0] as unknown as Record<string, unknown>;
       console.log(`   - First item sample:`);
       console.log(`     - id: ${sample.id || 'undefined'}`);
-      console.log(`     - url: ${sample.url?.substring(0, 60) || 'undefined'}...`);
+      console.log(`     - url: ${(sample.url as string)?.substring(0, 60) || 'undefined'}...`);
       console.log(`     - date_posted: ${sample.date_posted || 'undefined'}`);
       console.log(`     - num_likes: ${sample.num_likes}`);
-      console.log(`     - snapshot_id: ${(sample as unknown as { snapshot_id?: string }).snapshot_id || 'none'}`);
+      console.log(`     - snapshot_id: ${sample.snapshot_id || 'none'}`);
+      console.log(`     - status: ${sample.status || 'none'}`);
+      console.log(`     - error: ${sample.error || 'none'}`);
     }
 
     // Check if BrightData returned async snapshot responses instead of actual data
