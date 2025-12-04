@@ -301,24 +301,65 @@ export async function startAsyncScrape(jobId: string): Promise<void> {
     }
 
     // Check if BrightData returned async snapshot responses instead of actual data
+    let postsToProcess = allPosts;
     const asyncSnapshots = allPosts.filter(p => isAsyncSnapshotResponse(p));
     if (asyncSnapshots.length > 0) {
       console.warn(`\n⚠️  [AsyncScraper] ${asyncSnapshots.length} async snapshot responses detected`);
       if (asyncSnapshots.length === allPosts.length) {
-        // All responses are async snapshots - no immediate data available
-        console.warn(`❌ [AsyncScraper] ALL responses are async snapshots - no data available`);
-        await markJobFailed(jobId, 'BrightData returned async snapshot - data not immediately available. Please retry later.');
-        emitToCompany(companyId, 'scrape:failed', {
+        // All responses are async snapshots - retry after delay
+        console.log(`⏳ [AsyncScraper] ALL responses are async snapshots - will retry in 60 seconds...`);
+
+        await updateScrapeJob(jobId, { progress: 40 });
+        emitToCompany(companyId, 'scrape:progress', {
           jobId,
-          targetId,
-          error: 'Posts data is being processed by BrightData. Please try again in a few minutes.',
+          progress: 40,
+          message: 'BrightData is processing... retrying in 60s',
         });
-        return;
+
+        // Wait 60 seconds and retry
+        await sleep(60000);
+
+        console.log(`🔄 [AsyncScraper] Retrying posts scrape after delay...`);
+        emitToCompany(companyId, 'scrape:progress', {
+          jobId,
+          progress: 45,
+          message: 'Retrying posts fetch...',
+        });
+
+        try {
+          const retryPosts = await brightdataQueue.scrapePosts(targetUrl, discoverType);
+          const retryAsyncSnapshots = retryPosts.filter(p => isAsyncSnapshotResponse(p));
+
+          if (retryAsyncSnapshots.length === retryPosts.length) {
+            // Still all async snapshots after retry - give up
+            console.warn(`❌ [AsyncScraper] Retry still returned async snapshots - giving up`);
+            await markJobFailed(jobId, 'BrightData data not ready after retry. Please try again later.');
+            emitToCompany(companyId, 'scrape:failed', {
+              jobId,
+              targetId,
+              error: 'Posts data still processing. Please try again in a few minutes.',
+            });
+            return;
+          }
+
+          // Use retry results
+          postsToProcess = retryPosts;
+          console.log(`✅ [AsyncScraper] Retry succeeded with ${retryPosts.length} posts`);
+        } catch (retryError) {
+          console.error(`❌ [AsyncScraper] Retry failed:`, retryError);
+          await markJobFailed(jobId, 'Retry failed: ' + (retryError instanceof Error ? retryError.message : 'Unknown error'));
+          emitToCompany(companyId, 'scrape:failed', {
+            jobId,
+            targetId,
+            error: 'Failed to fetch posts after retry.',
+          });
+          return;
+        }
       }
     }
 
     // Filter out async snapshot responses to get actual posts
-    const validPosts = allPosts.filter(p => !isAsyncSnapshotResponse(p));
+    const validPosts = postsToProcess.filter(p => !isAsyncSnapshotResponse(p));
     console.log(`\n✅ [AsyncScraper] Valid posts after filtering: ${validPosts.length}`);
 
     // Sort by date (most recent first) and take only the 20 most recent
