@@ -95,43 +95,6 @@ async function pollSnapshot<T>(snapshotId: string, description: string): Promise
   throw new Error(`Snapshot ${snapshotId} timed out after ${SNAPSHOT_MAX_WAIT_MS / 1000}s`);
 }
 
-/**
- * Parse response and handle async snapshot if needed
- */
-async function handleBrightDataResponse<T>(
-  response: { data: unknown },
-  description: string
-): Promise<T[]> {
-  const data = response.data;
-
-  // Check if response is an async snapshot
-  if (typeof data === 'object' && data !== null) {
-    const obj = data as Record<string, unknown>;
-
-    // Check for snapshot_id (async processing)
-    if ('snapshot_id' in obj && typeof obj.snapshot_id === 'string') {
-      console.log(`   📋 Got async snapshot: ${obj.snapshot_id}`);
-      return pollSnapshot<T>(obj.snapshot_id, description);
-    }
-
-    // Check for "starting" status
-    if ('status' in obj && obj.status === 'starting') {
-      console.log(`   ⏳ Status: starting - BrightData queue is busy`);
-      // Wait and retry the entire request (handled by caller)
-      throw new Error('BRIGHTDATA_STARTING');
-    }
-  }
-
-  // Response contains actual data
-  if (typeof data === 'string') {
-    // Parse NDJSON
-    const lines = data.trim().split('\n').filter(line => line.trim());
-    return lines.map(line => JSON.parse(line)) as T[];
-  }
-
-  return Array.isArray(data) ? data as T[] : [data as T];
-}
-
 export interface BrightDataLinkedInCompany {
   id: string;
   name: string;
