@@ -6,6 +6,131 @@ const BRIGHTDATA_COMPANY_DATASET_ID = 'gd_l1vikfnt1wgvvqz95w'; // LinkedIn Compa
 const BRIGHTDATA_PROFILE_DATASET_ID = 'gd_l1viktl72bvl7bjuj0'; // LinkedIn Profile Scraper dataset ID
 const BRIGHTDATA_POSTS_DATASET_ID = 'gd_lyy3tktm25m4avu764'; // LinkedIn Posts Discovery dataset ID
 const BRIGHTDATA_SCRAPE_URL = 'https://api.brightdata.com/datasets/v3/scrape';
+const BRIGHTDATA_SNAPSHOT_URL = 'https://api.brightdata.com/datasets/v3/snapshot';
+
+// Polling configuration
+const SNAPSHOT_POLL_INTERVAL_MS = 5000; // Poll every 5 seconds
+const SNAPSHOT_MAX_WAIT_MS = 300000; // Max 5 minutes wait
+const SNAPSHOT_RETRY_DELAY_MS = 10000; // Wait 10 seconds if status is "starting"
+
+/**
+ * Helper to sleep for a specified duration
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Check the status of a BrightData snapshot
+ */
+async function checkSnapshotStatus(snapshotId: string): Promise<{ status: string; data?: unknown[] }> {
+  const response = await axios.get(`${BRIGHTDATA_SNAPSHOT_URL}/${snapshotId}`, {
+    headers: {
+      Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
+    },
+    params: {
+      format: 'json',
+    },
+    timeout: 30000,
+    validateStatus: () => true, // Don't throw on any status code
+  });
+
+  // BrightData returns different status codes:
+  // 200 = ready, data in body
+  // 202 = still processing
+  // Other = error
+
+  if (response.status === 200) {
+    // Data is ready
+    const data = Array.isArray(response.data) ? response.data : [response.data];
+    return { status: 'ready', data };
+  }
+
+  if (response.status === 202) {
+    // Still processing - check the response for status info
+    const statusInfo = response.data as { status?: string; message?: string };
+    return { status: statusInfo?.status || 'processing' };
+  }
+
+  // Error
+  console.error(`[BrightData] Snapshot check failed:`, response.status, response.data);
+  return { status: 'error' };
+}
+
+/**
+ * Poll a snapshot until it's ready or timeout
+ */
+async function pollSnapshot<T>(snapshotId: string, description: string): Promise<T[]> {
+  console.log(`⏳ [BrightData] Polling snapshot ${snapshotId} (${description})...`);
+
+  const startTime = Date.now();
+  let pollCount = 0;
+
+  while (Date.now() - startTime < SNAPSHOT_MAX_WAIT_MS) {
+    pollCount++;
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    console.log(`   📡 Poll #${pollCount} (${elapsed}s elapsed)...`);
+
+    const result = await checkSnapshotStatus(snapshotId);
+
+    if (result.status === 'ready' && result.data) {
+      console.log(`   ✅ Snapshot ready! Got ${result.data.length} items`);
+      return result.data as T[];
+    }
+
+    if (result.status === 'error') {
+      throw new Error(`Snapshot ${snapshotId} returned error`);
+    }
+
+    if (result.status === 'starting') {
+      // BrightData hasn't started yet, wait a bit longer
+      console.log(`   ⏳ Status: starting - waiting ${SNAPSHOT_RETRY_DELAY_MS / 1000}s...`);
+      await sleep(SNAPSHOT_RETRY_DELAY_MS);
+    } else {
+      // Normal processing, poll again after interval
+      await sleep(SNAPSHOT_POLL_INTERVAL_MS);
+    }
+  }
+
+  throw new Error(`Snapshot ${snapshotId} timed out after ${SNAPSHOT_MAX_WAIT_MS / 1000}s`);
+}
+
+/**
+ * Parse response and handle async snapshot if needed
+ */
+async function handleBrightDataResponse<T>(
+  response: { data: unknown },
+  description: string
+): Promise<T[]> {
+  const data = response.data;
+
+  // Check if response is an async snapshot
+  if (typeof data === 'object' && data !== null) {
+    const obj = data as Record<string, unknown>;
+
+    // Check for snapshot_id (async processing)
+    if ('snapshot_id' in obj && typeof obj.snapshot_id === 'string') {
+      console.log(`   📋 Got async snapshot: ${obj.snapshot_id}`);
+      return pollSnapshot<T>(obj.snapshot_id, description);
+    }
+
+    // Check for "starting" status
+    if ('status' in obj && obj.status === 'starting') {
+      console.log(`   ⏳ Status: starting - BrightData queue is busy`);
+      // Wait and retry the entire request (handled by caller)
+      throw new Error('BRIGHTDATA_STARTING');
+    }
+  }
+
+  // Response contains actual data
+  if (typeof data === 'string') {
+    // Parse NDJSON
+    const lines = data.trim().split('\n').filter(line => line.trim());
+    return lines.map(line => JSON.parse(line)) as T[];
+  }
+
+  return Array.isArray(data) ? data as T[] : [data as T];
+}
 
 export interface BrightDataLinkedInCompany {
   id: string;
@@ -80,120 +205,204 @@ export interface BrightDataLinkedInProfile {
 }
 
 /**
- * Scrape LinkedIn company page using BrightData (synchronous API)
- * Returns the scraped data directly
+ * Scrape LinkedIn company page using BrightData
+ * Now with proper async snapshot polling support
  */
 export async function scrapeLinkedInCompany(linkedinUrl: string): Promise<BrightDataLinkedInCompany[]> {
   if (!BRIGHTDATA_API_KEY) {
     throw new Error('BRIGHTDATA_API_KEY is not configured');
   }
 
-  try {
-    const response = await axios.post(
-      BRIGHTDATA_SCRAPE_URL,
-      {
-        input: [{ url: linkedinUrl }],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          dataset_id: BRIGHTDATA_COMPANY_DATASET_ID,
-          notify: false,
-          include_errors: true,
-        },
-        timeout: 180000, // 3 minute timeout
-        // Request raw text to handle NDJSON format
-        responseType: 'text',
-        transformResponse: [(data) => data],
+  console.log(`\n🏢 [BrightData Company API] Request: ${linkedinUrl}`);
+
+  const MAX_STARTING_RETRIES = 3;
+  let startingRetries = 0;
+
+  while (startingRetries < MAX_STARTING_RETRIES) {
+    try {
+      console.log(`   ⏳ Making request to BrightData...`);
+      const startTime = Date.now();
+
+      const response = await axios.post(
+        BRIGHTDATA_SCRAPE_URL,
+        { input: [{ url: linkedinUrl }] },
+        {
+          headers: {
+            Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            dataset_id: BRIGHTDATA_COMPANY_DATASET_ID,
+            notify: false,
+            include_errors: true,
+          },
+          timeout: 180000,
+          validateStatus: () => true,
+        }
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(`   ✅ Response in ${elapsed}ms (status: ${response.status})`);
+
+      // Parse response
+      let responseData = response.data;
+      if (typeof responseData === 'string') {
+        try {
+          responseData = JSON.parse(responseData);
+        } catch {
+          const firstLine = responseData.split('\n')[0];
+          try { responseData = JSON.parse(firstLine); } catch { /* ignore */ }
+        }
       }
-    );
 
-    // BrightData returns NDJSON (newline-delimited JSON) - parse each line
-    const rawData = response.data as string;
-    const companies: BrightDataLinkedInCompany[] = [];
+      // Check for async snapshot
+      if (typeof responseData === 'object' && responseData !== null) {
+        const obj = responseData as Record<string, unknown>;
 
-    const lines = rawData.split('\n').filter(line => line.trim());
-    for (const line of lines) {
-      try {
-        const company = JSON.parse(line) as BrightDataLinkedInCompany;
-        companies.push(company);
-      } catch (parseError) {
-        console.warn('[BrightData] Failed to parse company line:', line.substring(0, 100));
+        if ('snapshot_id' in obj && typeof obj.snapshot_id === 'string') {
+          console.log(`   📋 Got async snapshot: ${obj.snapshot_id}`);
+          return pollSnapshot<BrightDataLinkedInCompany>(obj.snapshot_id, `Company ${linkedinUrl}`);
+        }
+
+        if ('status' in obj && obj.status === 'starting') {
+          startingRetries++;
+          console.log(`   ⏳ Status: starting (retry ${startingRetries}/${MAX_STARTING_RETRIES})`);
+          await sleep(SNAPSHOT_RETRY_DELAY_MS);
+          continue;
+        }
+
+        if ('error' in obj) {
+          console.warn(`   ⚠️ BrightData error: ${obj.error}`);
+          return [];
+        }
       }
-    }
 
-    console.log(`[BrightData] Parsed ${companies.length} companies from NDJSON response`);
-    return companies;
-  } catch (error) {
-    console.error('BrightData scrape error:', error);
-    if (axios.isAxiosError(error)) {
-      console.error('Response data:', error.response?.data);
-      console.error('Response status:', error.response?.status);
+      // Parse NDJSON response
+      const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      const companies: BrightDataLinkedInCompany[] = [];
+      const lines = rawData.split('\n').filter((line: string) => line.trim());
+
+      for (const line of lines) {
+        try {
+          const company = JSON.parse(line) as BrightDataLinkedInCompany;
+          if (!('error' in company) && !('snapshot_id' in company) && !('status' in company)) {
+            companies.push(company);
+          }
+        } catch { /* skip */ }
+      }
+
+      console.log(`   📊 Parsed ${companies.length} companies`);
+      return companies;
+
+    } catch (error) {
+      console.error('BrightData company scrape error:', error);
+      throw new Error('Failed to scrape LinkedIn company');
     }
-    throw new Error('Failed to trigger LinkedIn scraping');
   }
+
+  console.warn(`   ⚠️ BrightData still "starting" after retries`);
+  return [];
 }
 
 
 /**
  * Scrape LinkedIn profile page using BrightData
- * Uses scrape API endpoint (synchronous) like company scraper
+ * Now with proper async snapshot polling support
  */
 export async function scrapeLinkedInProfile(linkedinUrl: string): Promise<BrightDataLinkedInProfile[]> {
   if (!BRIGHTDATA_API_KEY) {
     throw new Error('BRIGHTDATA_API_KEY is not configured');
   }
 
-  try {
-    const response = await axios.post(
-      BRIGHTDATA_SCRAPE_URL,
-      {
-        input: [{ url: linkedinUrl }],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          dataset_id: BRIGHTDATA_PROFILE_DATASET_ID,
-          notify: false,
-          include_errors: true,
-        },
-        timeout: 150000, // 2.5 minute timeout (profiles take ~90 seconds)
-        // Request raw text to handle NDJSON format
-        responseType: 'text',
-        transformResponse: [(data) => data],
+  console.log(`\n👤 [BrightData Profile API] Request: ${linkedinUrl}`);
+
+  const MAX_STARTING_RETRIES = 3;
+  let startingRetries = 0;
+
+  while (startingRetries < MAX_STARTING_RETRIES) {
+    try {
+      console.log(`   ⏳ Making request to BrightData...`);
+      const startTime = Date.now();
+
+      const response = await axios.post(
+        BRIGHTDATA_SCRAPE_URL,
+        { input: [{ url: linkedinUrl }] },
+        {
+          headers: {
+            Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            dataset_id: BRIGHTDATA_PROFILE_DATASET_ID,
+            notify: false,
+            include_errors: true,
+          },
+          timeout: 180000,
+          validateStatus: () => true,
+        }
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(`   ✅ Response in ${elapsed}ms (status: ${response.status})`);
+
+      // Parse response
+      let responseData = response.data;
+      if (typeof responseData === 'string') {
+        try {
+          responseData = JSON.parse(responseData);
+        } catch {
+          const firstLine = responseData.split('\n')[0];
+          try { responseData = JSON.parse(firstLine); } catch { /* ignore */ }
+        }
       }
-    );
 
-    // BrightData returns NDJSON (newline-delimited JSON) - parse each line
-    const rawData = response.data as string;
-    const profiles: BrightDataLinkedInProfile[] = [];
+      // Check for async snapshot
+      if (typeof responseData === 'object' && responseData !== null) {
+        const obj = responseData as Record<string, unknown>;
 
-    const lines = rawData.split('\n').filter(line => line.trim());
-    for (const line of lines) {
-      try {
-        const profile = JSON.parse(line) as BrightDataLinkedInProfile;
-        profiles.push(profile);
-      } catch (parseError) {
-        console.warn('[BrightData] Failed to parse profile line:', line.substring(0, 100));
+        if ('snapshot_id' in obj && typeof obj.snapshot_id === 'string') {
+          console.log(`   📋 Got async snapshot: ${obj.snapshot_id}`);
+          return pollSnapshot<BrightDataLinkedInProfile>(obj.snapshot_id, `Profile ${linkedinUrl}`);
+        }
+
+        if ('status' in obj && obj.status === 'starting') {
+          startingRetries++;
+          console.log(`   ⏳ Status: starting (retry ${startingRetries}/${MAX_STARTING_RETRIES})`);
+          await sleep(SNAPSHOT_RETRY_DELAY_MS);
+          continue;
+        }
+
+        if ('error' in obj) {
+          console.warn(`   ⚠️ BrightData error: ${obj.error}`);
+          return [];
+        }
       }
-    }
 
-    console.log(`[BrightData] Parsed ${profiles.length} profiles from NDJSON response`);
-    return profiles;
-  } catch (error) {
-    console.error('BrightData profile scrape error:', error);
-    if (axios.isAxiosError(error)) {
-      console.error('Response data:', error.response?.data);
-      console.error('Response status:', error.response?.status);
+      // Parse NDJSON response
+      const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      const profiles: BrightDataLinkedInProfile[] = [];
+      const lines = rawData.split('\n').filter((line: string) => line.trim());
+
+      for (const line of lines) {
+        try {
+          const profile = JSON.parse(line) as BrightDataLinkedInProfile;
+          if (!('error' in profile) && !('snapshot_id' in profile) && !('status' in profile)) {
+            profiles.push(profile);
+          }
+        } catch { /* skip */ }
+      }
+
+      console.log(`   📊 Parsed ${profiles.length} profiles`);
+      return profiles;
+
+    } catch (error) {
+      console.error('BrightData profile scrape error:', error);
+      throw new Error('Failed to scrape LinkedIn profile');
     }
-    throw new Error('Failed to scrape LinkedIn profile');
   }
+
+  console.warn(`   ⚠️ BrightData still "starting" after retries`);
+  return [];
 }
 
 /**
@@ -259,6 +468,7 @@ export interface BrightDataLinkedInPost {
 
 /**
  * Scrape LinkedIn posts using BrightData Posts Discovery API
+ * Now with proper async snapshot polling support
  * @param linkedinUrl - The LinkedIn company or profile URL
  * @param discoverBy - 'company_url' or 'profile_url'
  * @param dateRange - Optional date range for profile scraping
@@ -277,72 +487,126 @@ export async function scrapeLinkedInPosts(
   console.log(`   - Discover by: ${discoverBy}`);
   console.log(`   - Dataset ID: ${BRIGHTDATA_POSTS_DATASET_ID}`);
 
-  try {
-    // Build input based on discover type
-    const input = discoverBy === 'profile_url' && dateRange
-      ? [{ url: linkedinUrl, start_date: dateRange.startDate, end_date: dateRange.endDate }]
-      : [{ url: linkedinUrl }];
+  // Retry logic for "starting" status
+  const MAX_STARTING_RETRIES = 3;
+  let startingRetries = 0;
 
-    console.log(`   - Input: ${JSON.stringify(input)}`);
-    console.log(`   - Timeout: 300000ms (5 min)`);
-    console.log(`   ⏳ Waiting for BrightData response...`);
+  while (startingRetries < MAX_STARTING_RETRIES) {
+    try {
+      // Build input based on discover type
+      const input = discoverBy === 'profile_url' && dateRange
+        ? [{ url: linkedinUrl, start_date: dateRange.startDate, end_date: dateRange.endDate }]
+        : [{ url: linkedinUrl }];
 
-    const startTime = Date.now();
-    const response = await axios.post(
-      BRIGHTDATA_SCRAPE_URL,
-      { input },
-      {
-        headers: {
-          Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        params: {
-          dataset_id: BRIGHTDATA_POSTS_DATASET_ID,
-          notify: false,
-          include_errors: true,
-          type: 'discover_new',
-          discover_by: discoverBy,
-        },
-        timeout: 300000, // 5 minute timeout (posts discovery can be slow)
-        // Request raw text to handle NDJSON format
-        responseType: 'text',
-        transformResponse: [(data) => data], // Prevent axios from auto-parsing
+      console.log(`   - Input: ${JSON.stringify(input)}`);
+      console.log(`   ⏳ Making initial request to BrightData...`);
+
+      const startTime = Date.now();
+      const response = await axios.post(
+        BRIGHTDATA_SCRAPE_URL,
+        { input },
+        {
+          headers: {
+            Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            dataset_id: BRIGHTDATA_POSTS_DATASET_ID,
+            notify: false,
+            include_errors: true,
+            type: 'discover_new',
+            discover_by: discoverBy,
+          },
+          timeout: 180000, // 3 minute timeout for initial request
+          validateStatus: () => true, // Don't throw on any status code
+        }
+      );
+
+      const elapsed = Date.now() - startTime;
+      console.log(`   ✅ Initial response in ${elapsed}ms (status: ${response.status})`);
+
+      // Parse the response (might be JSON or NDJSON string)
+      let responseData = response.data;
+      if (typeof responseData === 'string') {
+        try {
+          // Try to parse as single JSON first
+          responseData = JSON.parse(responseData);
+        } catch {
+          // Might be NDJSON - parse first line to check for snapshot
+          const firstLine = responseData.split('\n')[0];
+          try {
+            responseData = JSON.parse(firstLine);
+          } catch {
+            // Not valid JSON at all
+          }
+        }
       }
-    );
 
-    const elapsed = Date.now() - startTime;
-    console.log(`\n✅ [BrightData Posts API] Response received in ${elapsed}ms`);
+      // Check for async snapshot response
+      if (typeof responseData === 'object' && responseData !== null) {
+        const obj = responseData as Record<string, unknown>;
 
-    // BrightData returns NDJSON (newline-delimited JSON) - parse each line
-    const rawData = response.data as string;
-    console.log(`   - Raw response length: ${rawData.length} chars`);
-    console.log(`   - First 200 chars: ${rawData.substring(0, 200)}...`);
+        // Check for snapshot_id - need to poll
+        if ('snapshot_id' in obj && typeof obj.snapshot_id === 'string') {
+          console.log(`   📋 Got async snapshot: ${obj.snapshot_id}`);
+          console.log(`   ⏳ Starting polling (max ${SNAPSHOT_MAX_WAIT_MS / 1000}s)...`);
 
-    const posts: BrightDataLinkedInPost[] = [];
+          const posts = await pollSnapshot<BrightDataLinkedInPost>(
+            obj.snapshot_id,
+            `Posts for ${linkedinUrl}`
+          );
 
-    // Split by newlines and parse each JSON object
-    const lines = rawData.split('\n').filter(line => line.trim());
-    console.log(`   - Lines in NDJSON: ${lines.length}`);
+          console.log(`📊 [BrightData Posts API] Got ${posts.length} posts from snapshot`);
+          return posts;
+        }
 
-    for (const line of lines) {
-      try {
-        const post = JSON.parse(line) as BrightDataLinkedInPost;
-        posts.push(post);
-      } catch (parseError) {
-        console.warn(`   ⚠️  Failed to parse line: ${line.substring(0, 100)}`);
+        // Check for "starting" status - retry after delay
+        if ('status' in obj && obj.status === 'starting') {
+          startingRetries++;
+          console.log(`   ⏳ Status: starting (retry ${startingRetries}/${MAX_STARTING_RETRIES})`);
+          console.log(`   ⏳ Waiting ${SNAPSHOT_RETRY_DELAY_MS / 1000}s before retry...`);
+          await sleep(SNAPSHOT_RETRY_DELAY_MS);
+          continue;
+        }
+
+        // Check for error response
+        if ('error' in obj) {
+          console.warn(`   ⚠️ BrightData error: ${obj.error}`);
+          return []; // Return empty array for errors like "No posts found"
+        }
       }
-    }
 
-    console.log(`📊 [BrightData Posts API] Parsed ${posts.length} posts from NDJSON response`);
-    return posts;
-  } catch (error) {
-    console.error('BrightData posts scrape error:', error);
-    if (axios.isAxiosError(error)) {
-      console.error('Response data:', error.response?.data);
-      console.error('Response status:', error.response?.status);
+      // Response contains actual data - parse NDJSON
+      const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      const posts: BrightDataLinkedInPost[] = [];
+      const lines = rawData.split('\n').filter((line: string) => line.trim());
+
+      for (const line of lines) {
+        try {
+          const post = JSON.parse(line) as BrightDataLinkedInPost;
+          // Skip error/status responses in the data
+          if (!('error' in post) && !('snapshot_id' in post) && !('status' in post)) {
+            posts.push(post);
+          }
+        } catch {
+          // Skip unparseable lines
+        }
+      }
+
+      console.log(`📊 [BrightData Posts API] Parsed ${posts.length} posts from response`);
+      return posts;
+
+    } catch (error) {
+      console.error('BrightData posts scrape error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Response status:', error.response?.status);
+      }
+      throw new Error('Failed to scrape LinkedIn posts');
     }
-    throw new Error('Failed to scrape LinkedIn posts');
   }
+
+  console.warn(`   ⚠️ BrightData still "starting" after ${MAX_STARTING_RETRIES} retries`);
+  return []; // Return empty if we exhausted retries
 }
 
 /**
