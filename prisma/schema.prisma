@@ -232,6 +232,7 @@ model Blueprint {
   companyId String
   title     String   // e.g., "Engaging LinkedIn Thought Leadership Post"
   platform  String   // "LinkedIn", "Twitter", etc.
+  actionType String? // "post", "comment", "repost", "story", "video"
 
   // Generation inputs
   objective           String   // User's objective (e.g., "thought leadership")
@@ -286,6 +287,7 @@ model Blueprint {
 
   @@index([companyId])
   @@index([platform])
+  @@index([actionType])
   @@index([createdAt])
   @@map("blueprints")
 }

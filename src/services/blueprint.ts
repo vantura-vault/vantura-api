@@ -1,9 +1,12 @@
 import { prisma } from '../db.js';
 
+export type ActionType = 'post' | 'comment' | 'repost' | 'story' | 'video';
+
 export interface CreateBlueprintInput {
   companyId: string;
   title: string;
   platform: string;
+  actionType?: ActionType;
   objective: string;
   topicTags: string[];
   contentAngle?: string;
@@ -39,6 +42,7 @@ export async function createBlueprint(input: CreateBlueprintInput) {
       companyId: input.companyId,
       title: input.title,
       platform: input.platform,
+      actionType: input.actionType,
       objective: input.objective,
       topicTags: input.topicTags,
       contentAngle: input.contentAngle,
@@ -75,6 +79,7 @@ export async function createBlueprint(input: CreateBlueprintInput) {
 export interface GetBlueprintsParams {
   companyId: string;
   platform?: string;
+  actionType?: string;
   sortBy?: 'createdAt' | 'vanturaScore' | 'title';
   sortOrder?: 'asc' | 'desc';
   limit?: number;
@@ -85,6 +90,7 @@ export async function getBlueprints(params: GetBlueprintsParams) {
   const {
     companyId,
     platform,
+    actionType,
     sortBy = 'createdAt',
     sortOrder = 'desc',
     limit = 20,
@@ -94,6 +100,9 @@ export async function getBlueprints(params: GetBlueprintsParams) {
   const where: any = { companyId };
   if (platform) {
     where.platform = platform;
+  }
+  if (actionType) {
+    where.actionType = actionType;
   }
 
   const orderBy: any = {};

@@ -20,10 +20,10 @@ export const blueprintController = {
     }
   },
 
-  // GET /api/blueprints?companyId=X&platform=LinkedIn&sortBy=createdAt&sortOrder=desc&limit=20&offset=0
+  // GET /api/blueprints?companyId=X&platform=LinkedIn&actionType=post&sortBy=createdAt&sortOrder=desc&limit=20&offset=0
   async list(req: Request, res: Response): Promise<void> {
     try {
-      const { companyId, platform, sortBy, sortOrder, limit, offset } = req.query;
+      const { companyId, platform, actionType, sortBy, sortOrder, limit, offset } = req.query;
 
       if (!companyId || typeof companyId !== 'string') {
         res.status(400).json({
@@ -36,6 +36,7 @@ export const blueprintController = {
       const result = await getBlueprints({
         companyId,
         platform: platform as string | undefined,
+        actionType: actionType as string | undefined,
         sortBy: (sortBy as any) || 'createdAt',
         sortOrder: (sortOrder as any) || 'desc',
         limit: limit ? Number(limit) : 20,

@@ -177,28 +177,40 @@ Your task: Create a comprehensive content blueprint optimized for ${objective ||
 
 Return ONLY valid JSON (no markdown) with this structure:
 {
-  "title": "string",
+  "title": "string - descriptive title like 'Engaging LinkedIn Thought Leadership Post'",
+  "actionType": "post | comment | repost | story | video - the type of content action",
   "reasoning": "string - 2-3 sentences explaining WHY this blueprint will work based on platform rules, company context, and competitor analysis",
-  "visualDescription": "string",
-  "hook": "string",
-  "context": "string",
-  "hashtags": [{"tag": "string", "engagement": "string"}],
-  "mentions": [{"handle": "string", "engagement": "string"}],
-  "bestTimeToPost": "string",
-  "recommendedFormat": "string",
-  "postingInsight": "string",
+  "visualDescription": "string - describe the visual format with slide breakdown if carousel",
+  "references": [
+    {
+      "name": "string - industry leader name who inspired this style",
+      "handle": "string - their LinkedIn/social handle if known",
+      "reason": "string - why this reference is relevant (e.g., 'Hook pattern', 'Storytelling style')"
+    }
+  ],
+  "hook": "string - the opening attention-grabbing line",
+  "context": "string - the main body content with @mentions where relevant",
+  "hashtags": [{"tag": "string", "engagement": "string like '12.3% Eng.'"}],
+  "mentions": [{"handle": "string", "engagement": "string like '16.9% Eng.'"}],
+  "bestTimeToPost": "string like 'Tuesdays, 10 AM PST'",
+  "recommendedFormat": "string like 'Carousel Post (Image + Text)'",
+  "postingInsight": "string - why this format drives engagement",
   "vanturaScore": number,
   "estimatedReachMin": number,
   "estimatedReachMax": number,
   "estimatedEngagementMin": number,
   "estimatedEngagementMax": number,
-  "dataSources": ["array of sources you used"],
-  "timeWindow": "string",
+  "dataSources": ["array of sources like 'Competitor Vault', 'Your Top Posts'"],
+  "timeWindow": "string like 'Last 30 Days'",
   "confidence": number,
   "yourPerformanceScore": number,
   "competitorScore": number,
-  "optimizationNote": "string"
+  "optimizationNote": "string like 'This blueprint is optimized for high visibility and audience interaction.'"
 }
+
+IMPORTANT:
+- Include exactly 3 references (industry leaders whose style inspired the content)
+- actionType should match the content format (usually "post" for LinkedIn)
 
 CRITICAL REQUIREMENTS:
 - Variants should have LOW randomness - keep them very similar

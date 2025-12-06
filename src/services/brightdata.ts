@@ -457,9 +457,18 @@ export async function scrapeLinkedInPosts(
   while (startingRetries < MAX_STARTING_RETRIES) {
     try {
       // Build input based on discover type
-      const input = discoverBy === 'profile_url' && dateRange
-        ? [{ url: linkedinUrl, start_date: dateRange.startDate, end_date: dateRange.endDate }]
-        : [{ url: linkedinUrl }];
+      // For profile_url, BrightData REQUIRES start_date and end_date
+      let input: Array<{ url: string; start_date?: string; end_date?: string }>;
+
+      if (discoverBy === 'profile_url') {
+        // Use provided dateRange or default to last 2 years
+        const endDate = dateRange?.endDate || new Date().toISOString();
+        const startDate = dateRange?.startDate || new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString();
+        input = [{ url: linkedinUrl, start_date: startDate, end_date: endDate }];
+        console.log(`   - Date range: ${startDate.split('T')[0]} to ${endDate.split('T')[0]}`);
+      } else {
+        input = [{ url: linkedinUrl }];
+      }
 
       console.log(`   - Input: ${JSON.stringify(input)}`);
       console.log(`   ⏳ Making initial request to BrightData...`);
