@@ -40,6 +40,8 @@ export const suggestionsController = {
           where: { id: companyId },
           select: {
             name: true,
+            industry: true,
+            description: true,
             values: true,
             brandVoice: true,
             targetAudience: true,
@@ -51,11 +53,14 @@ export const suggestionsController = {
           companyContext = `
 COMPANY PROFILE:
 - Company: ${company.name}
+- Industry: ${company.industry || 'Not specified'}
+- Description: ${company.description || 'Not specified'}
 - Core Values: ${company.values || 'Not specified'}
 - Brand Voice: ${company.brandVoice || 'Professional and authentic'}
 - Target Audience: ${company.targetAudience || 'Industry professionals'}
 - Content Priorities: ${company.contentPriorities || 'Balanced approach'}
 
+IMPORTANT: Generate content that is SPECIFIC to this company's industry and business. Do NOT generate generic content.
 Use this brand voice and values in all content you create.
 `;
         }
@@ -245,6 +250,15 @@ ${contentAngle === 'storytelling' ? '- Focus on personal narratives and stories'
 ${contentAngle === 'educational' ? '- Focus on how-to and actionable tutorials' : ''}
 ${contentAngle === 'thought-leadership' ? '- Focus on insights and opinions' : ''}
 ${contentAngle === 'behind-the-scenes' ? '- Focus on process and transparency' : ''}
+
+COMPETITOR ANALYSIS INSTRUCTIONS (VERY IMPORTANT):
+- You MUST analyze the competitor posts provided in the COMPETITOR INTELLIGENCE section
+- Study what topics, angles, and messaging styles competitors are using
+- Identify gaps: What are competitors NOT talking about that would resonate with the target audience?
+- Create content that differentiates from competitors while addressing similar market interests
+- If competitors are in prediction markets (like Kalshi, Polymarket), consider how to position the company's unique value
+- The generated content should be RELEVANT to the company's industry and competitors - NOT generic SaaS advice
+- Do NOT generate generic content about "70% of startups" unless that's specifically relevant to the company's niche
 `;
 
       // 6. Combine all context
