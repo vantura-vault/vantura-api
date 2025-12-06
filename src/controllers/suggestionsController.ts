@@ -108,6 +108,8 @@ Learn from these patterns when creating new content.
       // 4. Fetch competitor insights (if useCompetitorPosts = true)
       let competitorContext = '';
       let competitorCount = 0;
+      let competitorNames: string[] = [];
+      let competitorPostsCount = 0;
       if (useCompetitorPosts !== false) {
         const competitorRelations = await prisma.companyRelationship.findMany({
           where: {
@@ -124,7 +126,7 @@ Learn from these patterns when creating new content.
                     },
                   },
                   orderBy: { postedAt: 'desc' },
-                  take: 3,
+                  take: 5,
                   include: { analysis: true },
                 },
               },
@@ -142,6 +144,17 @@ Learn from these patterns when creating new content.
         });
 
         competitorCount = competitorRelations.length;
+        competitorNames = competitorRelations.map(rel => rel.companyB.name);
+        competitorPostsCount = competitorRelations.reduce((sum, rel) => sum + rel.companyB.posts.length, 0);
+
+        // Log detailed competitor info
+        console.log('📊 Competitor Intelligence Found:');
+        competitorRelations.forEach(rel => {
+          console.log(`  - ${rel.companyB.name}: ${rel.companyB.posts.length} posts`);
+          rel.companyB.posts.forEach(p => {
+            console.log(`      Post: ${p.captionText?.substring(0, 50)}... (${p.analysis?.engagement || 0} engagement)`);
+          });
+        });
 
         if (competitorRelations.length > 0 || competitorBlueprints.length > 0) {
           competitorContext = `
@@ -149,8 +162,11 @@ COMPETITOR INTELLIGENCE:
 
 ${competitorRelations.map((rel) => `
 Competitor: ${rel.companyB.name}
-Recent posts:
-${rel.companyB.posts.map(p => `  - ${p.captionText?.substring(0, 100)}... (${p.analysis?.engagement || 0} engagement)`).join('\n')}
+${rel.companyB.posts.length > 0 ? `Recent ${platform} posts:
+${rel.companyB.posts.map(p => {
+  const engRate = p.analysis?.impressions ? ((p.analysis.engagement / p.analysis.impressions) * 100).toFixed(1) + '%' : 'N/A';
+  return `  - "${p.captionText?.substring(0, 150)}..." (${p.analysis?.engagement || 0} total engagement, ${engRate} rate)`;
+}).join('\n')}` : 'No recent posts found for this competitor.'}
 `).join('\n')}
 
 ${competitorBlueprints.length > 0 ? `
@@ -162,7 +178,7 @@ ${i + 1}. ${bp.title} (Score: ${bp.vanturaScore}/100)
 `).join('\n')}
 ` : ''}
 
-Find gaps and opportunities they're missing.
+Use this competitor intelligence to find gaps and opportunities. Reference specific competitors by name in dataSources.
 `;
         }
       }
@@ -190,23 +206,30 @@ Return ONLY valid JSON (no markdown) with this structure:
   ],
   "hook": "string - the opening attention-grabbing line",
   "context": "string - the main body content with @mentions where relevant",
-  "hashtags": [{"tag": "string", "engagement": "string like '12.3% Eng.'"}],
-  "mentions": [{"handle": "string", "engagement": "string like '16.9% Eng.'"}],
+  "hashtags": [{"tag": "string WITHOUT # prefix (e.g., 'B2BSaaS' not '#B2BSaaS')", "engagement": "string like '4.2% Eng.'"}],
+  "mentions": [{"handle": "string WITHOUT @ prefix (e.g., 'johndoe' not '@johndoe')", "engagement": "string like '5.1% Eng.'"}],
   "bestTimeToPost": "string like 'Tuesdays, 10 AM PST'",
   "recommendedFormat": "string like 'Carousel Post (Image + Text)'",
   "postingInsight": "string - why this format drives engagement",
-  "vanturaScore": number,
-  "estimatedReachMin": number,
-  "estimatedReachMax": number,
-  "estimatedEngagementMin": number,
-  "estimatedEngagementMax": number,
-  "dataSources": ["array of sources like 'Competitor Vault', 'Your Top Posts'"],
+  "vanturaScore": "number 0-100 representing overall post quality score",
+  "estimatedReachMin": "number - minimum estimated impressions (e.g., 500)",
+  "estimatedReachMax": "number - maximum estimated impressions (e.g., 2000)",
+  "estimatedEngagementMin": "number - minimum engagement rate as percentage (REALISTIC: 1-5%, e.g., 2)",
+  "estimatedEngagementMax": "number - maximum engagement rate as percentage (REALISTIC: 3-10%, e.g., 6)",
+  "dataSources": ["array of SPECIFIC sources used - include competitor names if competitor data was provided"],
   "timeWindow": "string like 'Last 30 Days'",
-  "confidence": number,
-  "yourPerformanceScore": number,
-  "competitorScore": number,
+  "confidence": "number 0-100 representing confidence in predictions",
+  "yourPerformanceScore": "number 0-100 based on your historical post performance",
+  "competitorScore": "number 0-100 based on competitor performance data",
   "optimizationNote": "string like 'This blueprint is optimized for high visibility and audience interaction.'"
 }
+
+CRITICAL VALUE CONSTRAINTS:
+- estimatedEngagementMin/Max: MUST be realistic (1-10% range). LinkedIn average is 2-4%.
+- confidence: Return as 0-100, NOT as a decimal (e.g., 85 not 0.85)
+- hashtags.tag: Do NOT include the # symbol
+- mentions.handle: Do NOT include the @ symbol
+- dataSources: Be SPECIFIC - list actual competitor names, "Your Top Posts", "Brand Voice Profile" etc.
 
 IMPORTANT:
 - Include exactly 3 references (industry leaders whose style inspired the content)
@@ -260,6 +283,8 @@ Create content for these topics with the specified angle and objective.
       console.log(`Competitor Posts: ${useCompetitorPosts !== false ? 'ON' : 'OFF'}`);
       console.log(`Top Posts Found: ${topPostsCount}`);
       console.log(`Competitors Analyzed: ${competitorCount}`);
+      console.log(`Competitor Names: ${competitorNames.length > 0 ? competitorNames.join(', ') : 'None'}`);
+      console.log(`Total Competitor Posts: ${competitorPostsCount}`);
       console.log('='.repeat(80) + '\n');
 
       // 7. Call OpenAI for blueprint
