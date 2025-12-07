@@ -69,7 +69,8 @@ export const vaultService = {
       const postCount = competitor.posts.length;
 
       console.log(`📈 Posts for ${competitor.name}:`, {
-        totalPosts: postCount
+        totalPosts: postCount,
+        profilePictureUrl: competitor.profilePictureUrl || 'NOT SET'
       });
 
       return {
