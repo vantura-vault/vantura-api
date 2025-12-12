@@ -2,6 +2,7 @@ import { prisma } from '../config/database.js';
 import { RegisterDTO, LoginDTO, AuthResponseDTO } from '../types/index.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+import { prewarmCacheAsync } from './cacheWarmer.js';
 
 const SALT_ROUNDS = 12;
 
@@ -117,6 +118,11 @@ export const authService = {
       }
     });
 
+    // Pre-warm cache for the company (async - doesn't block response)
+    if (company.id) {
+      prewarmCacheAsync(company.id);
+    }
+
     return {
       user: {
         id: user.id,
@@ -166,6 +172,11 @@ export const authService = {
         expiresAt
       }
     });
+
+    // Pre-warm cache for the company (async - doesn't block response)
+    if (user.companyId) {
+      prewarmCacheAsync(user.companyId);
+    }
 
     return {
       user: {
@@ -224,5 +235,17 @@ export const authService = {
       exists: !!company,
       companyName: company?.name
     };
+  },
+
+  /**
+   * Get token expiry date (for caching)
+   */
+  async getTokenExpiry(token: string): Promise<{ expiresAt: Date } | null> {
+    const authToken = await prisma.authToken.findUnique({
+      where: { token },
+      select: { expiresAt: true }
+    });
+
+    return authToken;
   }
 };

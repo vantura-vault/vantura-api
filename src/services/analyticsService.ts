@@ -1,4 +1,5 @@
 import { prisma } from '../config/database.js';
+import { cache, CacheKeys, CacheTTL } from './cache.js';
 
 export type TimeRange = '1M' | '6M' | '1Y' | 'ALL';
 export type ComparisonMode = 'none' | 'top' | 'all' | 'industry';
@@ -31,6 +32,21 @@ export const analyticsService = {
     maWindow?: number,
     comparisonMode: ComparisonMode = 'none'
   ): Promise<HistoricalMetricsResult> {
+    const cacheKey = CacheKeys.analytics(companyId, platform, range);
+
+    // Try cache first (only for non-comparison requests to keep cache simple)
+    if (comparisonMode === 'none') {
+      const cached = await cache.get<HistoricalMetricsResult>(cacheKey);
+      if (cached) {
+        // Apply moving average to cached data if needed
+        if (maWindow && maWindow > 1) {
+          cached.followers = applyMovingAverage(cached.followers, maWindow);
+          cached.engagement = applyMovingAverage(cached.engagement, maWindow);
+        }
+        return cached;
+      }
+    }
+
     const rangeDays: Record<TimeRange, number> = {
       '1M': 30,
       '6M': 180,
@@ -106,7 +122,7 @@ export const analyticsService = {
       competitorEngagement = competitorData.engagement;
     }
 
-    return {
+    const result = {
       platform,
       range,
       dates,
@@ -115,6 +131,20 @@ export const analyticsService = {
       competitorFollowers,
       competitorEngagement,
     };
+
+    // Cache raw data (without moving average) for non-comparison requests
+    if (comparisonMode === 'none') {
+      const cacheData = {
+        platform,
+        range,
+        dates,
+        followers, // Store raw data
+        engagement, // Store raw data
+      };
+      await cache.set(cacheKey, cacheData, CacheTTL.analytics);
+    }
+
+    return result;
   },
 
   async getRecentPosts(companyId: string, limit: number) {

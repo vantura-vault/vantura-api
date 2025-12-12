@@ -12,6 +12,7 @@ import suggestionsRoutes from './routes/suggestions.js';
 import dataChamberRoutes from './routes/dataChamber.js';
 import blueprintRoutes from './routes/blueprint.js';
 import { initWebSocket } from './websocket/wsServer.js';
+import { initRedis, closeRedis, cache } from './services/cache.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -54,11 +55,30 @@ app.get('/', (_req, res) => {
 
 // Health check
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+  res.json({
+    status: 'ok',
+    cache: cache.isAvailable() ? 'connected' : 'disabled',
+  });
 });
+
+// Initialize Redis cache
+initRedis();
 
 // Initialize WebSocket server
 initWebSocket(httpServer, CORS_ORIGIN);
+
+// Graceful shutdown
+const shutdown = async () => {
+  console.log('\n🛑 Shutting down gracefully...');
+  await closeRedis();
+  httpServer.close(() => {
+    console.log('👋 Server closed');
+    process.exit(0);
+  });
+};
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 // Start server
 httpServer.listen(PORT, () => {

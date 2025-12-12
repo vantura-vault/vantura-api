@@ -1,6 +1,7 @@
 import { prisma } from '../db.js';
 import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
 import { triggerAsyncScrape } from './asyncScraper.js';
+import { cache, CacheKeys, CacheTTL } from './cache.js';
 
 const POSTS_SCRAPE_DELAY_MS = 30000; // 30 second delay between profile and posts scrape
 const FRESHNESS_DAYS = 7; // Data is considered "fresh" if updated within this many days
@@ -30,9 +31,18 @@ interface DataHealthResult {
 
 export const dataChamberService = {
   /**
-   * Get company data chamber settings
+   * Get company data chamber settings (with caching)
    */
   async getSettings(companyId: string): Promise<DataChamberSettings> {
+    const cacheKey = CacheKeys.companySettings(companyId);
+
+    // Try cache first
+    const cached = await cache.get<DataChamberSettings>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Cache miss - fetch from database
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -56,7 +66,7 @@ export const dataChamberService = {
     const targetAudience = company.targetAudience || '';
     const personalNotes = company.personalNotes || '';
 
-    return {
+    const settings: DataChamberSettings = {
       values,
       brandVoice,
       targetAudience,
@@ -65,6 +75,11 @@ export const dataChamberService = {
       linkedInUrl: company.linkedInUrl || undefined,
       linkedInType: company.linkedInType || undefined,
     };
+
+    // Cache the result
+    await cache.set(cacheKey, settings, CacheTTL.companySettings);
+
+    return settings;
   },
 
   /**
@@ -114,8 +129,11 @@ export const dataChamberService = {
       },
     });
 
-    // Parse and return updated settings
-    return {
+    // Invalidate cache after update
+    await cache.del(CacheKeys.companySettings(companyId));
+
+    // Build updated settings
+    const updatedSettings: DataChamberSettings = {
       values: company.values ? JSON.parse(company.values) : [],
       brandVoice: company.brandVoice || '',
       targetAudience: company.targetAudience || '',
@@ -124,6 +142,11 @@ export const dataChamberService = {
       linkedInUrl: company.linkedInUrl || undefined,
       linkedInType: company.linkedInType || undefined,
     };
+
+    // Cache the new settings
+    await cache.set(CacheKeys.companySettings(companyId), updatedSettings, CacheTTL.companySettings);
+
+    return updatedSettings;
   },
 
   /**
@@ -137,6 +160,7 @@ export const dataChamberService = {
   ): Promise<{ profilePictureUrl?: string; name?: string; followers?: number }> {
     // Import BrightData queue to avoid rate limiting
     const { brightdataQueue } = await import('./brightdataQueue.js');
+    const { ensureS3Image } = await import('./imageStorage.js');
 
     let profilePictureUrl: string | undefined;
     let name: string | undefined;
@@ -148,7 +172,8 @@ export const dataChamberService = {
         const results = await brightdataQueue.scrapeCompany(url);
         if (results && results.length > 0) {
           const data = results[0];
-          profilePictureUrl = data.logo;
+          // Proxy image to S3 to avoid ad blocker issues
+          profilePictureUrl = (await ensureS3Image(data.logo, companyId, 'logo')) || undefined;
           name = data.name;
           followers = data.followers;
           console.log(`✅ [DataChamber] Got company data - logo: ${profilePictureUrl}, followers: ${followers}`);
@@ -158,7 +183,8 @@ export const dataChamberService = {
         const results = await brightdataQueue.scrapeProfile(url);
         if (results && results.length > 0) {
           const data = results[0];
-          profilePictureUrl = data.avatar;
+          // Proxy image to S3 to avoid ad blocker issues
+          profilePictureUrl = (await ensureS3Image(data.avatar, companyId, 'profile')) || undefined;
           name = data.name;
           followers = data.followers || data.connections;
           console.log(`✅ [DataChamber] Got profile data - avatar: ${profilePictureUrl}, followers: ${followers}`);
@@ -274,6 +300,14 @@ export const dataChamberService = {
    * Returns a score from 0-100 based on data completeness and freshness
    */
   async calculateDataHealth(companyId: string): Promise<DataHealthResult> {
+    const cacheKey = CacheKeys.dataHealth(companyId);
+
+    // Try cache first
+    const cached = await cache.get<DataHealthResult>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const components: DataHealthComponent[] = [];
     const freshnessDate = new Date();
     freshnessDate.setDate(freshnessDate.getDate() - FRESHNESS_DAYS);
@@ -401,6 +435,11 @@ export const dataChamberService = {
       status = 'needs_attention';
     }
 
-    return { score, status, components };
+    const result = { score, status, components };
+
+    // Cache the result
+    await cache.set(cacheKey, result, CacheTTL.dataHealth);
+
+    return result;
   },
 };

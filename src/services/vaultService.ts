@@ -3,6 +3,8 @@ import { brightdataQueue } from './brightdataQueue.js';
 import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
 import { triggerAsyncScrape } from './asyncScraper.js';
 import { emitToCompany } from '../websocket/wsServer.js';
+import { cache, CacheKeys, CacheTTL } from './cache.js';
+import { ensureS3Image } from './imageStorage.js';
 
 interface AddCompetitorInput {
   companyId: string;
@@ -13,7 +15,15 @@ interface AddCompetitorInput {
 
 export const vaultService = {
   async getCompetitors(companyId: string) {
-    // Get all competitor relationships for this company
+    const cacheKey = CacheKeys.competitors(companyId);
+
+    // Try cache first
+    const cached = await cache.get<{ items: any[] }>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Cache miss - fetch from database
     const relationships = await prisma.companyRelationship.findMany({
       where: {
         companyAId: companyId,
@@ -84,7 +94,12 @@ export const vaultService = {
       };
     });
 
-    return { items: competitors };
+    const result = { items: competitors };
+
+    // Cache the result
+    await cache.set(cacheKey, result, CacheTTL.competitors);
+
+    return result;
   },
 
   async addCompetitor(input: AddCompetitorInput) {
@@ -108,6 +123,9 @@ export const vaultService = {
         relationshipType: 'competitor'
       }
     });
+
+    // Invalidate competitors cache for this company
+    await cache.del(CacheKeys.competitors(companyId));
 
     // Set up platform records immediately (with 0 followers - will be updated by background scrape)
     if (platforms && platforms.length > 0) {
@@ -174,7 +192,8 @@ export const vaultService = {
                   gotAsyncSnapshot = true;
                 } else {
                   followerCount = data.followers || 0;
-                  profilePictureUrl = data.logo || null;
+                  // Proxy image to S3 to avoid ad blocker issues
+                  profilePictureUrl = await ensureS3Image(data.logo, competitorCompany.id, 'logo');
                   console.log(`✅ [Background] Scraped company: ${followerCount} followers`);
                 }
               }
@@ -189,7 +208,8 @@ export const vaultService = {
                   gotAsyncSnapshot = true;
                 } else {
                   followerCount = data.followers || data.connections || 0;
-                  profilePictureUrl = data.avatar || null;
+                  // Proxy image to S3 to avoid ad blocker issues
+                  profilePictureUrl = await ensureS3Image(data.avatar, competitorCompany.id, 'profile');
                   console.log(`✅ [Background] Scraped profile: ${followerCount} followers`);
                 }
               }
@@ -212,7 +232,9 @@ export const vaultService = {
                     const data = retryResults[0] as any;
                     if (!data.snapshot_id) {
                       followerCount = data.followers || data.connections || 0;
-                      profilePictureUrl = data.logo || data.avatar || null;
+                      // Proxy image to S3 to avoid ad blocker issues
+                      const rawImageUrl = data.logo || data.avatar || null;
+                      profilePictureUrl = await ensureS3Image(rawImageUrl, competitorCompany.id, 'logo');
                       console.log(`✅ [Background] Retry succeeded: ${followerCount} followers`);
 
                       // Update company with scraped data
@@ -359,6 +381,14 @@ export const vaultService = {
   },
 
   async getCompetitorDetails(competitorId: string, companyId: string) {
+    const cacheKey = CacheKeys.competitorDetails(competitorId);
+
+    // Try cache first
+    const cached = await cache.get<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     // Verify the competitor relationship exists
     const relationship = await prisma.companyRelationship.findFirst({
       where: {
@@ -433,7 +463,7 @@ export const vaultService = {
       };
     });
 
-    return {
+    const result = {
       id: competitor.id,
       name: competitor.name,
       description: competitor.description,
@@ -441,6 +471,11 @@ export const vaultService = {
       platforms,
       posts
     };
+
+    // Cache the result
+    await cache.set(cacheKey, result, CacheTTL.competitorDetails);
+
+    return result;
   },
 
   async deleteCompetitor(competitorId: string, companyId: string) {
@@ -481,6 +516,10 @@ export const vaultService = {
     await prisma.company.delete({
       where: { id: competitorId }
     });
+
+    // Invalidate competitors cache and competitor details cache
+    await cache.del(CacheKeys.competitors(companyId));
+    await cache.del(CacheKeys.competitorDetails(competitorId));
 
     console.log('✅ Competitor and all related data deleted');
 
