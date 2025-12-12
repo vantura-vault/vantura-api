@@ -217,7 +217,6 @@ async function handleScrapePosts(job: Job<ScrapePostsJobData>): Promise<void> {
       emitToCompany(companyId, 'scrape:completed', {
         jobId: scrapeJobId,
         targetId,
-        targetName,
         postsScraped: 0,
       });
       return;
