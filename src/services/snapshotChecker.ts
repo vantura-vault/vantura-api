@@ -238,6 +238,8 @@ async function processPendingSnapshot(snapshot: {
       // Invalidate caches
       await cache.del(CacheKeys.competitors(companyId));
       await cache.del(CacheKeys.competitorDetails(targetId));
+      // Invalidate analytics cache for the competitor (all platforms/ranges)
+      await cache.delPattern(`analytics:${targetId}:*`);
 
       // Notify frontend
       emitToCompany(companyId, 'scrape:completed', {

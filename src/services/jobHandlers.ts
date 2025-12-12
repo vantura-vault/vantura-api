@@ -274,6 +274,8 @@ async function handleScrapePosts(job: Job<ScrapePostsJobData>): Promise<void> {
     // Invalidate caches
     await cache.del(CacheKeys.competitors(companyId));
     await cache.del(CacheKeys.competitorDetails(targetId));
+    // Invalidate analytics cache for the competitor (all platforms/ranges)
+    await cache.delPattern(`analytics:${targetId}:*`);
 
     await job.updateProgress(100);
 
