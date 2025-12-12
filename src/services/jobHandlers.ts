@@ -180,7 +180,7 @@ async function handleScrapeProfile(job: Job<ScrapeProfileJobData>): Promise<void
  * Handle posts scraping
  */
 async function handleScrapePosts(job: Job<ScrapePostsJobData>): Promise<void> {
-  const { companyId, targetId, targetName, targetUrl, platform, scrapeType, scrapeJobId } = job.data;
+  const { companyId, targetId, targetName, targetUrl, platform, scrapeJobId } = job.data;
 
   console.log(`📝 [Job] Scraping posts for ${targetName}: ${targetUrl}`);
 
@@ -282,7 +282,6 @@ async function handleScrapePosts(job: Job<ScrapePostsJobData>): Promise<void> {
     emitToCompany(companyId, 'scrape:completed', {
       jobId: scrapeJobId,
       targetId,
-      targetName,
       postsScraped: postsStored,
     });
 
@@ -296,7 +295,6 @@ async function handleScrapePosts(job: Job<ScrapePostsJobData>): Promise<void> {
     emitToCompany(companyId, 'scrape:failed', {
       jobId: scrapeJobId,
       targetId,
-      targetName,
       error: error instanceof Error ? error.message : 'Scrape failed',
     });
 

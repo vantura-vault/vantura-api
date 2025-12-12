@@ -6,7 +6,6 @@
  */
 
 import { Queue, Worker, Job, QueueEvents } from 'bullmq';
-import { emitToCompany } from '../websocket/wsServer.js';
 
 // Job types
 export const JobTypes = {
