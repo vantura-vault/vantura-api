@@ -251,7 +251,7 @@ export const dashboardService = {
         }
       },
       orderBy: { postedAt: 'desc' },
-      take: 20 // Last 20 posts
+      take: 5 // Last 5 posts for engagement rate
     });
 
     // Get older posts for growth comparison
@@ -302,6 +302,93 @@ export const dashboardService = {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10); // Last 10 data points
 
+    // Build engagement leaderboard: user vs competitors
+    const leaderboardEntries: Array<{
+      name: string;
+      engagementRate: number;
+      isYou: boolean;
+      companyId: string;
+    }> = [];
+
+    // Add user's company
+    leaderboardEntries.push({
+      name: company.name,
+      engagementRate: parseFloat(avgEngagementRate.toFixed(2)),
+      isYou: true,
+      companyId: company.id
+    });
+
+    // Get competitors and calculate their engagement rates
+    const competitorRelationships = await prisma.companyRelationship.findMany({
+      where: {
+        companyAId: company.id,
+        relationshipType: 'competitor'
+      },
+      include: {
+        companyB: {
+          include: {
+            platforms: {
+              include: {
+                platform: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    for (const rel of competitorRelationships) {
+      const competitor = rel.companyB;
+
+      // Get competitor's total followers from latest snapshots
+      let competitorTotalFollowers = 0;
+      for (const cp of competitor.platforms) {
+        const latestSnapshot = await prisma.platformSnapshot.findFirst({
+          where: { platformId: cp.id },
+          orderBy: { capturedAt: 'desc' }
+        });
+        competitorTotalFollowers += latestSnapshot?.followerCount || 0;
+      }
+
+      // Get competitor's recent posts with engagement metrics
+      const competitorPosts = await prisma.post.findMany({
+        where: { companyId: competitor.id },
+        include: {
+          metricsSnapshots: {
+            orderBy: { capturedAt: 'desc' },
+            take: 1
+          }
+        },
+        orderBy: { postedAt: 'desc' },
+        take: 5 // Last 5 posts for engagement rate
+      });
+
+      // Calculate competitor engagement rate
+      let competitorEngagementRate = 0;
+      if (competitorPosts.length > 0 && competitorTotalFollowers > 0) {
+        const totalEngagement = competitorPosts.reduce((sum, p) => {
+          const snapshot = p.metricsSnapshots[0];
+          return sum + (snapshot?.likeCount || 0) + (snapshot?.commentCount || 0);
+        }, 0);
+        const avgEngagementPerPost = totalEngagement / competitorPosts.length;
+        competitorEngagementRate = (avgEngagementPerPost / competitorTotalFollowers) * 100;
+      }
+
+      leaderboardEntries.push({
+        name: competitor.name,
+        engagementRate: parseFloat(competitorEngagementRate.toFixed(2)),
+        isYou: false,
+        companyId: competitor.id
+      });
+    }
+
+    // Sort by engagement rate descending and add ranks
+    leaderboardEntries.sort((a, b) => b.engagementRate - a.engagementRate);
+    const engagementLeaderboard = leaderboardEntries.map((entry, index) => ({
+      rank: index + 1,
+      ...entry
+    }));
+
     return {
       company: {
         id: company.id,
@@ -329,7 +416,8 @@ export const dashboardService = {
       },
       platforms: platformStats,
       insights,
-      recentActivity: allActivity
+      recentActivity: allActivity,
+      engagementLeaderboard
     };
   }
 };
