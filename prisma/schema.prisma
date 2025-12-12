@@ -169,7 +169,7 @@ model Post {
   metricsSnapshots PostSnapshot[]
   analysis         PostAnalysis?
 
-  @@unique([platformId, platformPostId])
+  @@unique([companyId, platformId, platformPostId])
   @@index([companyId])
   @@index([platformId])
   @@index([postedAt])
@@ -320,11 +320,40 @@ model ScrapeJob {
   // Relations
   initiatingCompany Company @relation("InitiatedJobs", fields: [companyId], references: [id], onDelete: Cascade)
   targetCompany     Company @relation("TargetedJobs", fields: [targetId], references: [id], onDelete: Cascade)
+  pendingSnapshots  PendingSnapshot[]
 
   @@index([companyId])
   @@index([targetId])
   @@index([status])
   @@map("scrape_jobs")
+}
+
+// ============================================
+// PENDING SNAPSHOTS (BrightData async polling)
+// ============================================
+
+model PendingSnapshot {
+  id            String   @id @default(cuid())
+  snapshotId    String   @unique // BrightData snapshot ID
+  scrapeJobId   String   // Reference to ScrapeJob
+  companyId     String   // Company that initiated (for WebSocket notifications)
+  targetId      String   // Target company being scraped
+  targetUrl     String   // LinkedIn URL
+  platform      String   @default("LinkedIn")
+
+  // Retry tracking
+  attempts      Int      @default(0)
+  maxAttempts   Int      @default(60) // ~30 min at 30s intervals
+  lastCheckedAt DateTime?
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+
+  // Relations
+  scrapeJob     ScrapeJob @relation(fields: [scrapeJobId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@map("pending_snapshots")
 }
 
 // ============================================

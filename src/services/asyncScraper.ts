@@ -133,11 +133,12 @@ async function storePosts(
         continue;
       }
 
-      // Check if post already exists
+      // Check if post already exists for THIS company
       console.log(`  🔍 Checking if post exists in DB...`);
       const existingPost = await prisma.post.findUnique({
         where: {
-          platformId_platformPostId: {
+          companyId_platformId_platformPostId: {
+            companyId: competitorId,
             platformId,
             platformPostId: postId,
           },

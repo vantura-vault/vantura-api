@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.js';
 import blueprintRoutes from './routes/blueprint.js';
 import vaultRoutes from './routes/vault.js';
 import { initWebSocket } from './websocket/wsServer.js';
+import { startSnapshotChecker, stopSnapshotChecker } from './services/snapshotChecker.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -36,4 +37,26 @@ httpServer.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`WebSocket server ready`);
   console.log(`CORS origin: ${CORS_ORIGIN}`);
+
+  // Start background snapshot checker
+  startSnapshotChecker();
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down...');
+  stopSnapshotChecker();
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down...');
+  stopSnapshotChecker();
+  httpServer.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });

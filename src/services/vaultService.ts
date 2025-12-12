@@ -1,9 +1,12 @@
 import { prisma } from '../db.js';
+import { emitToCompany } from '../websocket/wsServer.js';
+import { cache, CacheKeys, CacheTTL } from './cache.js';
+import { addScrapeProfileJob, isJobQueueAvailable } from './jobQueue.js';
+
+// Fallback imports for when job queue is not available
 import { brightdataQueue } from './brightdataQueue.js';
 import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
 import { triggerAsyncScrape } from './asyncScraper.js';
-import { emitToCompany } from '../websocket/wsServer.js';
-import { cache, CacheKeys, CacheTTL } from './cache.js';
 import { ensureS3Image } from './imageStorage.js';
 
 interface AddCompetitorInput {
@@ -166,209 +169,33 @@ export const vaultService = {
       syncing: true,
     });
 
-    // Run all scraping in background (non-blocking)
-    // This allows the API to return immediately
-    setImmediate(async () => {
-      console.log(`🔄 [VaultService] Starting background scrape for competitor: ${name}`);
+    // Queue background scraping jobs
+    if (platforms && platforms.length > 0) {
+      for (const platformInput of platforms) {
+        if (platformInput.platform !== 'LinkedIn' || !platformInput.url) continue;
 
-      if (platforms && platforms.length > 0) {
-        for (const platformInput of platforms) {
-          if (platformInput.platform !== 'LinkedIn' || !platformInput.url) continue;
-
-          try {
-            let followerCount = 0;
-            let profilePictureUrl: string | null = null;
-            let gotAsyncSnapshot = false;
-
-            // Scrape profile/company data via queue
-            if (platformInput.type === 'company') {
-              console.log(`🔍 [Background] Queuing LinkedIn company scrape for: ${platformInput.url}`);
-              const brightDataResults = await brightdataQueue.scrapeCompany(platformInput.url);
-
-              if (brightDataResults && brightDataResults.length > 0) {
-                const data = brightDataResults[0];
-                if ((data as unknown as { snapshot_id?: string }).snapshot_id) {
-                  console.log(`⏳ [Background] BrightData returned async snapshot for company, will retry...`);
-                  gotAsyncSnapshot = true;
-                } else {
-                  followerCount = data.followers || 0;
-                  // Proxy image to S3 to avoid ad blocker issues
-                  profilePictureUrl = await ensureS3Image(data.logo, competitorCompany.id, 'logo');
-                  console.log(`✅ [Background] Scraped company: ${followerCount} followers`);
-                }
-              }
-            } else if (platformInput.type === 'profile') {
-              console.log(`🔍 [Background] Queuing LinkedIn profile scrape for: ${platformInput.url}`);
-              const brightDataResults = await brightdataQueue.scrapeProfile(platformInput.url);
-
-              if (brightDataResults && brightDataResults.length > 0) {
-                const data = brightDataResults[0];
-                if ((data as unknown as { snapshot_id?: string }).snapshot_id) {
-                  console.log(`⏳ [Background] BrightData returned async snapshot for profile, will retry...`);
-                  gotAsyncSnapshot = true;
-                } else {
-                  followerCount = data.followers || data.connections || 0;
-                  // Proxy image to S3 to avoid ad blocker issues
-                  profilePictureUrl = await ensureS3Image(data.avatar, competitorCompany.id, 'profile');
-                  console.log(`✅ [Background] Scraped profile: ${followerCount} followers`);
-                }
-              }
-            }
-
-            // If BrightData returned async snapshot, retry after delay
-            if (gotAsyncSnapshot) {
-              console.log(`🔄 [Background] Scheduling retry in 60 seconds for: ${platformInput.url}`);
-              setTimeout(async () => {
-                try {
-                  console.log(`🔄 [Background] Retrying scrape for: ${platformInput.url}`);
-                  let retryResults;
-                  if (platformInput.type === 'company') {
-                    retryResults = await brightdataQueue.scrapeCompany(platformInput.url);
-                  } else {
-                    retryResults = await brightdataQueue.scrapeProfile(platformInput.url);
-                  }
-
-                  if (retryResults && retryResults.length > 0) {
-                    const data = retryResults[0] as any;
-                    if (!data.snapshot_id) {
-                      followerCount = data.followers || data.connections || 0;
-                      // Proxy image to S3 to avoid ad blocker issues
-                      const rawImageUrl = data.logo || data.avatar || null;
-                      profilePictureUrl = await ensureS3Image(rawImageUrl, competitorCompany.id, 'logo');
-                      console.log(`✅ [Background] Retry succeeded: ${followerCount} followers`);
-
-                      // Update company with scraped data
-                      if (profilePictureUrl) {
-                        await prisma.company.update({
-                          where: { id: competitorCompany.id },
-                          data: { profilePictureUrl }
-                        });
-                      }
-
-                      // Update platform snapshot
-                      if (followerCount > 0) {
-                        const platform = await prisma.platform.findUnique({
-                          where: { name: platformInput.platform }
-                        });
-                        if (platform) {
-                          const companyPlatform = await prisma.companyPlatform.findFirst({
-                            where: { companyId: competitorCompany.id, platformId: platform.id }
-                          });
-                          if (companyPlatform) {
-                            await prisma.platformSnapshot.create({
-                              data: {
-                                companyId: competitorCompany.id,
-                                platformId: companyPlatform.id,
-                                followerCount,
-                                postCount: 0,
-                                capturedAt: new Date()
-                              }
-                            });
-                          }
-                        }
-                      }
-
-                      // Notify frontend
-                      emitToCompany(companyId, 'competitor:profileReady', {
-                        competitorId: competitorCompany.id,
-                        name: competitorCompany.name,
-                        profilePictureUrl,
-                        followers: followerCount,
-                      });
-                    } else {
-                      console.log(`⚠️ [Background] Retry still returned async snapshot, giving up`);
-                    }
-                  }
-                } catch (retryError) {
-                  console.error(`⚠️ [Background] Retry failed:`, retryError);
-                }
-              }, 60000); // Retry after 60 seconds
-              continue; // Skip the rest of this iteration
-            }
-
-            // Update company with scraped data
-            if (profilePictureUrl) {
-              await prisma.company.update({
-                where: { id: competitorCompany.id },
-                data: { profilePictureUrl }
-              });
-            }
-
-            // Update platform snapshot with real follower count
-            if (followerCount > 0) {
-              const platform = await prisma.platform.findUnique({
-                where: { name: platformInput.platform }
-              });
-
-              if (platform) {
-                const companyPlatform = await prisma.companyPlatform.findFirst({
-                  where: {
-                    companyId: competitorCompany.id,
-                    platformId: platform.id
-                  }
-                });
-
-                if (companyPlatform) {
-                  await prisma.platformSnapshot.create({
-                    data: {
-                      companyId: competitorCompany.id,
-                      platformId: companyPlatform.id,
-                      followerCount,
-                      postCount: 0,
-                      capturedAt: new Date()
-                    }
-                  });
-                }
-              }
-            }
-
-            // Notify frontend that profile data is ready
-            emitToCompany(companyId, 'competitor:profileReady', {
-              competitorId: competitorCompany.id,
-              name: competitorCompany.name,
-              profilePictureUrl,
-              followers: followerCount,
-            });
-
-            // Schedule posts scrape (after profile scrape completes)
-            const existingJob = await getPendingScrapeJobForTarget(companyId, competitorCompany.id);
-            if (!existingJob && platformInput.url) {
-              const scrapeJob = await createScrapeJob({
-                companyId,
-                targetId: competitorCompany.id,
-                targetUrl: platformInput.url,
-                platform: platformInput.platform,
-                scrapeType: platformInput.type === 'profile' ? 'profile' : 'company',
-              });
-
-              console.log(`⏳ [Background] Scheduling posts scrape job: ${scrapeJob.id}`);
-              emitToCompany(companyId, 'scrape:scheduled', {
-                jobId: scrapeJob.id,
-                targetId: competitorCompany.id,
-                targetName: name,
-                delaySeconds: 5, // Short delay since profile scrape already completed
-              });
-
-              // Start posts scrape after short delay (profile already done via queue)
-              setTimeout(() => {
-                console.log(`🚀 [Background] Starting posts scrape job: ${scrapeJob.id}`);
-                triggerAsyncScrape(scrapeJob.id);
-              }, 5000);
-            }
-          } catch (error) {
-            console.error(`⚠️ [Background] Failed to scrape for ${platformInput.url}:`, error);
-            // Notify frontend of failure
-            emitToCompany(companyId, 'competitor:syncFailed', {
-              competitorId: competitorCompany.id,
-              name: competitorCompany.name,
-              error: error instanceof Error ? error.message : 'Scrape failed',
-            });
-          }
+        // Use BullMQ job queue if available, otherwise fall back to legacy approach
+        if (isJobQueueAvailable()) {
+          console.log(`📋 [VaultService] Queuing scrape job for competitor: ${name}`);
+          await addScrapeProfileJob({
+            companyId,
+            competitorId: competitorCompany.id,
+            competitorName: name,
+            url: platformInput.url,
+            type: platformInput.type,
+          });
+        } else {
+          // Fallback: use legacy setImmediate approach when Redis not available
+          console.log(`⚠️ [VaultService] Job queue not available, using legacy approach`);
+          this._legacyScrapeCompetitor(
+            companyId,
+            competitorCompany.id,
+            name,
+            platformInput
+          );
         }
       }
-
-      console.log(`✅ [VaultService] Background scrape complete for competitor: ${name}`);
-    });
+    }
 
     // Return immediately - don't wait for scraping
     return {
@@ -524,5 +351,173 @@ export const vaultService = {
     console.log('✅ Competitor and all related data deleted');
 
     return { success: true };
+  },
+
+  /**
+   * Legacy scrape method - used when job queue is not available
+   * Keeps the old setImmediate/setTimeout approach as fallback
+   */
+  _legacyScrapeCompetitor(
+    companyId: string,
+    competitorId: string,
+    competitorName: string,
+    platformInput: { platform: string; url: string; type: 'company' | 'profile' }
+  ) {
+    setImmediate(async () => {
+      console.log(`🔄 [Legacy] Starting background scrape for competitor: ${competitorName}`);
+
+      try {
+        let followerCount = 0;
+        let profilePictureUrl: string | null = null;
+        let gotAsyncSnapshot = false;
+
+        // Scrape profile/company data via queue
+        if (platformInput.type === 'company') {
+          console.log(`🔍 [Legacy] Queuing LinkedIn company scrape for: ${platformInput.url}`);
+          const brightDataResults = await brightdataQueue.scrapeCompany(platformInput.url);
+
+          if (brightDataResults && brightDataResults.length > 0) {
+            const data = brightDataResults[0];
+            if ((data as unknown as { snapshot_id?: string }).snapshot_id) {
+              console.log(`⏳ [Legacy] BrightData returned async snapshot for company`);
+              gotAsyncSnapshot = true;
+            } else {
+              followerCount = data.followers || 0;
+              profilePictureUrl = await ensureS3Image(data.logo, competitorId, 'logo');
+              console.log(`✅ [Legacy] Scraped company: ${followerCount} followers`);
+            }
+          }
+        } else {
+          console.log(`🔍 [Legacy] Queuing LinkedIn profile scrape for: ${platformInput.url}`);
+          const brightDataResults = await brightdataQueue.scrapeProfile(platformInput.url);
+
+          if (brightDataResults && brightDataResults.length > 0) {
+            const data = brightDataResults[0];
+            if ((data as unknown as { snapshot_id?: string }).snapshot_id) {
+              console.log(`⏳ [Legacy] BrightData returned async snapshot for profile`);
+              gotAsyncSnapshot = true;
+            } else {
+              followerCount = data.followers || data.connections || 0;
+              profilePictureUrl = await ensureS3Image(data.avatar, competitorId, 'profile');
+              console.log(`✅ [Legacy] Scraped profile: ${followerCount} followers`);
+            }
+          }
+        }
+
+        // Handle async snapshot with retry
+        if (gotAsyncSnapshot) {
+          console.log(`🔄 [Legacy] Scheduling retry in 60 seconds`);
+          setTimeout(async () => {
+            try {
+              let retryResults;
+              if (platformInput.type === 'company') {
+                retryResults = await brightdataQueue.scrapeCompany(platformInput.url);
+              } else {
+                retryResults = await brightdataQueue.scrapeProfile(platformInput.url);
+              }
+
+              if (retryResults && retryResults.length > 0) {
+                const data = retryResults[0] as any;
+                if (!data.snapshot_id) {
+                  const fc = data.followers || data.connections || 0;
+                  const imgUrl = await ensureS3Image(data.logo || data.avatar, competitorId, 'logo');
+
+                  if (imgUrl) {
+                    await prisma.company.update({
+                      where: { id: competitorId },
+                      data: { profilePictureUrl: imgUrl }
+                    });
+                  }
+
+                  if (fc > 0) {
+                    await this._updateFollowerSnapshot(competitorId, platformInput.platform, fc);
+                  }
+
+                  emitToCompany(companyId, 'competitor:profileReady', {
+                    competitorId,
+                    name: competitorName,
+                    profilePictureUrl: imgUrl,
+                    followers: fc,
+                  });
+                }
+              }
+            } catch (err) {
+              console.error(`⚠️ [Legacy] Retry failed:`, err);
+            }
+          }, 60000);
+          return;
+        }
+
+        // Update company with scraped data
+        if (profilePictureUrl) {
+          await prisma.company.update({
+            where: { id: competitorId },
+            data: { profilePictureUrl }
+          });
+        }
+
+        if (followerCount > 0) {
+          await this._updateFollowerSnapshot(competitorId, platformInput.platform, followerCount);
+        }
+
+        // Notify frontend
+        emitToCompany(companyId, 'competitor:profileReady', {
+          competitorId,
+          name: competitorName,
+          profilePictureUrl,
+          followers: followerCount,
+        });
+
+        // Schedule posts scrape
+        const existingJob = await getPendingScrapeJobForTarget(companyId, competitorId);
+        if (!existingJob) {
+          const scrapeJob = await createScrapeJob({
+            companyId,
+            targetId: competitorId,
+            targetUrl: platformInput.url,
+            platform: platformInput.platform,
+            scrapeType: platformInput.type,
+          });
+
+          setTimeout(() => {
+            triggerAsyncScrape(scrapeJob.id);
+          }, 5000);
+        }
+      } catch (error) {
+        console.error(`⚠️ [Legacy] Failed to scrape:`, error);
+        emitToCompany(companyId, 'competitor:syncFailed', {
+          competitorId,
+          name: competitorName,
+          error: error instanceof Error ? error.message : 'Scrape failed',
+        });
+      }
+    });
+  },
+
+  /**
+   * Helper to update follower snapshot
+   */
+  async _updateFollowerSnapshot(companyId: string, platformName: string, followerCount: number) {
+    const platform = await prisma.platform.findUnique({
+      where: { name: platformName }
+    });
+
+    if (!platform) return;
+
+    const companyPlatform = await prisma.companyPlatform.findFirst({
+      where: { companyId, platformId: platform.id }
+    });
+
+    if (!companyPlatform) return;
+
+    await prisma.platformSnapshot.create({
+      data: {
+        companyId,
+        platformId: companyPlatform.id,
+        followerCount,
+        postCount: 0,
+        capturedAt: new Date()
+      }
+    });
   }
 };

@@ -22,8 +22,9 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Check the status of a BrightData snapshot
+ * Exported for use by the snapshot checker cron job
  */
-async function checkSnapshotStatus(snapshotId: string): Promise<{ status: string; data?: unknown[] }> {
+export async function checkSnapshotStatus(snapshotId: string): Promise<{ status: string; data?: unknown[] }> {
   const response = await axios.get(`${BRIGHTDATA_SNAPSHOT_URL}/${snapshotId}`, {
     headers: {
       Authorization: `Bearer ${BRIGHTDATA_API_KEY}`,

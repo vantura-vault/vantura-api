@@ -2,6 +2,7 @@ import { prisma } from '../db.js';
 import { createScrapeJob, getPendingScrapeJobForTarget } from './scrapeJobService.js';
 import { triggerAsyncScrape } from './asyncScraper.js';
 import { cache, CacheKeys, CacheTTL } from './cache.js';
+import { addScrapePostsJob, isJobQueueAvailable } from './jobQueue.js';
 
 const POSTS_SCRAPE_DELAY_MS = 30000; // 30 second delay between profile and posts scrape
 const FRESHNESS_DAYS = 7; // Data is considered "fresh" if updated within this many days
@@ -275,10 +276,24 @@ export const dataChamberService = {
 
             console.log(`⏳ [DataChamber] Scheduling posts scrape in ${POSTS_SCRAPE_DELAY_MS / 1000}s...`);
 
-            setTimeout(() => {
-              console.log(`🚀 [DataChamber] Starting delayed posts scrape job: ${scrapeJob.id}`);
-              triggerAsyncScrape(scrapeJob.id);
-            }, POSTS_SCRAPE_DELAY_MS);
+            // Use job queue if available, otherwise fallback to setTimeout
+            if (isJobQueueAvailable()) {
+              await addScrapePostsJob({
+                companyId,
+                targetId: companyId,
+                targetName: name || 'Company',
+                targetUrl: url,
+                platform: 'LinkedIn',
+                scrapeType: type,
+                scrapeJobId: scrapeJob.id,
+              }, POSTS_SCRAPE_DELAY_MS);
+            } else {
+              // Fallback to legacy setTimeout approach
+              setTimeout(() => {
+                console.log(`🚀 [DataChamber] Starting delayed posts scrape job: ${scrapeJob.id}`);
+                triggerAsyncScrape(scrapeJob.id);
+              }, POSTS_SCRAPE_DELAY_MS);
+            }
           } catch (scrapeError) {
             console.error(`⚠️ [DataChamber] Failed to create scrape job:`, scrapeError);
             // Don't fail the whole operation - profile/followers already synced

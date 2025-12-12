@@ -13,6 +13,8 @@ import dataChamberRoutes from './routes/dataChamber.js';
 import blueprintRoutes from './routes/blueprint.js';
 import { initWebSocket } from './websocket/wsServer.js';
 import { initRedis, closeRedis, cache } from './services/cache.js';
+import { initJobQueues, startWorkers, closeJobQueues, getQueueStatus } from './services/jobQueue.js';
+import { startSnapshotChecker, stopSnapshotChecker } from './services/snapshotChecker.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -54,15 +56,24 @@ app.get('/', (_req, res) => {
 });
 
 // Health check
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
+  const queueStatus = await getQueueStatus();
   res.json({
     status: 'ok',
     cache: cache.isAvailable() ? 'connected' : 'disabled',
+    jobQueue: queueStatus.available ? 'connected' : 'disabled',
   });
 });
 
 // Initialize Redis cache
 initRedis();
+
+// Initialize job queues and workers (uses same Redis connection)
+initJobQueues();
+startWorkers();
+
+// Start background snapshot checker (polls BrightData async snapshots)
+startSnapshotChecker();
 
 // Initialize WebSocket server
 initWebSocket(httpServer, CORS_ORIGIN);
@@ -70,6 +81,8 @@ initWebSocket(httpServer, CORS_ORIGIN);
 // Graceful shutdown
 const shutdown = async () => {
   console.log('\n🛑 Shutting down gracefully...');
+  stopSnapshotChecker();
+  await closeJobQueues();
   await closeRedis();
   httpServer.close(() => {
     console.log('👋 Server closed');
