@@ -76,6 +76,7 @@ model Company {
   blueprints        Blueprint[]
   initiatedScrapeJobs ScrapeJob[] @relation("InitiatedJobs")
   targetedScrapeJobs  ScrapeJob[] @relation("TargetedJobs")
+  files             CompanyFile[]
 
   @@map("companies")
 }
@@ -95,6 +96,26 @@ model CompanyRelationship {
   @@index([companyAId])
   @@index([companyBId])
   @@map("company_relationships")
+}
+
+model CompanyFile {
+  id           String   @id @default(cuid())
+  companyId    String
+  filename     String   // Unique filename in S3
+  originalName String   // Original uploaded filename
+  mimeType     String   // MIME type (e.g., application/pdf, image/png)
+  size         Int      // File size in bytes
+  s3Key        String   // S3 object key
+  s3Url        String   // Public URL to the file
+  contentHash  String?  // SHA-256 hash for duplicate detection
+  uploadedAt   DateTime @default(now())
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, contentHash]) // Prevent duplicates per company
+  @@index([companyId])
+  @@map("company_files")
 }
 
 // ============================================

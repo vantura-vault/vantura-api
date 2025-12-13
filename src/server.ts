@@ -4,6 +4,8 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import blueprintRoutes from './routes/blueprint.js';
 import vaultRoutes from './routes/vault.js';
+import dataChamberRoutes from './routes/dataChamber.js';
+import fileRoutes from './routes/files.js';
 import { initWebSocket } from './websocket/wsServer.js';
 import { startSnapshotChecker, stopSnapshotChecker } from './services/snapshotChecker.js';
 
@@ -24,6 +26,8 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/blueprints', blueprintRoutes);
 app.use('/api/vault', vaultRoutes);
+app.use('/api/data-chamber', dataChamberRoutes);
+app.use('/api/files', fileRoutes);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

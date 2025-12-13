@@ -1,46 +1,40 @@
 import { prisma } from './src/db.js';
 
 async function check() {
-  // Get the most recent scrape job for Raytheon
-  const job = await prisma.scrapeJob.findFirst({
-    where: {
-      targetCompany: { name: { contains: 'Raytheon', mode: 'insensitive' } }
-    },
-    orderBy: { createdAt: 'desc' },
-    include: { targetCompany: true }
+  const raytheons = await prisma.company.findMany({
+    where: { name: { contains: 'Raytheon', mode: 'insensitive' } }
   });
+  console.log('=== RAYTHEON COMPANIES ===');
+  for (const r of raytheons) {
+    console.log(`  ${r.id}: ${r.name}`);
+  }
 
-  if (!job) {
-    console.log('No scrape jobs found for Raytheon');
+  if (raytheons.length === 0) {
+    console.log('No Raytheon found');
+    await prisma.$disconnect();
     return;
   }
 
-  console.log('Latest Raytheon scrape job:');
-  console.log('  Job ID:', job.id);
-  console.log('  Status:', job.status);
-  console.log('  Posts scraped:', job.postsScraped);
-  console.log('  Error:', job.errorMessage || 'none');
-  console.log('  Target ID:', job.targetId);
-  console.log('  Target Name:', job.targetCompany.name);
-  console.log('  Target URL:', job.targetUrl);
-
-  // Count posts for this target
-  const postCount = await prisma.post.count({
-    where: { companyId: job.targetId }
+  const jobs = await prisma.scrapeJob.findMany({
+    where: { targetId: { in: raytheons.map(r => r.id) } },
+    orderBy: { createdAt: 'desc' },
+    take: 10
   });
-  console.log('  Posts in DB:', postCount);
-
-  // Get LinkedIn platform
-  const platform = await prisma.platform.findUnique({
-    where: { name: 'LinkedIn' }
-  });
-
-  if (platform) {
-    const platformPosts = await prisma.post.count({
-      where: { companyId: job.targetId, platformId: platform.id }
-    });
-    console.log('  LinkedIn posts:', platformPosts);
+  console.log('\n=== RAYTHEON SCRAPE JOBS ===');
+  for (const j of jobs) {
+    console.log(`  ${j.id}: ${j.status} - created: ${j.createdAt}`);
   }
+
+  const pending = await prisma.pendingSnapshot.findMany({
+    where: { targetId: { in: raytheons.map(r => r.id) } }
+  });
+  console.log('\n=== PENDING SNAPSHOTS ===');
+  console.log(`  Count: ${pending.length}`);
+  for (const p of pending) {
+    console.log(`  ${p.snapshotId}: attempts ${p.attempts}/${p.maxAttempts}`);
+  }
+
+  await prisma.$disconnect();
 }
 
-check().then(() => process.exit(0)).catch(console.error);
+check().catch(e => { console.error(e); prisma.$disconnect(); });
