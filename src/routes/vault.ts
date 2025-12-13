@@ -9,6 +9,7 @@ router.use(authenticate);
 
 router.get('/competitors', vaultController.getCompetitors);
 router.post('/competitors', vaultController.addCompetitor);
+router.post('/competitors/refresh-all', vaultController.refreshAllCompetitors);
 router.get('/competitors/:id', vaultController.getCompetitorDetails);
 router.delete('/competitors/:id', vaultController.deleteCompetitor);
 

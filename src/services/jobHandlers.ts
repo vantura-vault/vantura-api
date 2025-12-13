@@ -492,21 +492,46 @@ function determineMediaType(post: BrightDataLinkedInPost): string {
 /**
  * Helper: Store posts from BrightData results
  * Uses correct BrightData field names: url, id, post_text, date_posted, num_likes, num_comments
+ *
+ * Strategy:
+ * - First scrape (no existing posts): Store top 20 posts
+ * - Subsequent scrapes: Only store posts newer than our most recent one
  */
 async function storePosts(companyId: string, platformId: string, posts: BrightDataLinkedInPost[]): Promise<number> {
   let stored = 0;
   console.log(`📦 [StorePosts] Starting to store ${posts.length} posts for ${companyId}`);
 
-  // Sort by date (newest first) and take top 20
+  // Sort all posts by date (newest first)
   const sortedPosts = [...posts]
-    .sort((a, b) => new Date(b.date_posted).getTime() - new Date(a.date_posted).getTime())
-    .slice(0, 20);
+    .sort((a, b) => new Date(b.date_posted).getTime() - new Date(a.date_posted).getTime());
 
-  console.log(`📦 [StorePosts] Processing ${sortedPosts.length} posts (sorted, sliced to 20)`);
+  // Check for existing posts to determine if this is a first scrape
+  const mostRecentPost = await prisma.post.findFirst({
+    where: { companyId, platformId },
+    orderBy: { postedAt: 'desc' },
+    select: { postedAt: true },
+  });
+
+  let postsToProcess: typeof sortedPosts;
+
+  if (!mostRecentPost) {
+    // First scrape: take top 20
+    postsToProcess = sortedPosts.slice(0, 20);
+    console.log(`📦 [StorePosts] First scrape - processing top ${postsToProcess.length} posts`);
+  } else {
+    // Subsequent scrape: only posts newer than our most recent
+    const cutoffDate = mostRecentPost.postedAt;
+    postsToProcess = sortedPosts.filter(post => {
+      const postDate = new Date(post.date_posted);
+      return postDate > cutoffDate;
+    });
+    console.log(`📦 [StorePosts] Incremental scrape - ${postsToProcess.length} new posts since ${cutoffDate.toISOString()}`);
+  }
+
   let skippedNoId = 0;
   let existingUpdated = 0;
 
-  for (const post of sortedPosts) {
+  for (const post of postsToProcess) {
     try {
       // Extract post ID - handle both Posts Discovery format (id) and Company/Profile format (post_id)
       const postId = post.id || (post as unknown as { post_id?: string }).post_id || extractPostIdFromUrl(post.url);

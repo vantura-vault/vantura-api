@@ -82,11 +82,12 @@ model Company {
 }
 
 model CompanyRelationship {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   companyAId       String
   companyBId       String
-  relationshipType String   // "competitor", "partner", etc.
-  createdAt        DateTime @default(now())
+  relationshipType String    // "competitor", "partner", etc.
+  createdAt        DateTime  @default(now())
+  lastScrapedAt    DateTime? // Track when competitor was last scraped (for cooldown)
 
   // Relations
   companyA Company @relation("CompanyA", fields: [companyAId], references: [id], onDelete: Cascade)

@@ -16,6 +16,7 @@ import { initWebSocket } from './websocket/wsServer.js';
 import { initRedis, closeRedis, cache } from './services/cache.js';
 import { initJobQueues, startWorkers, closeJobQueues, getQueueStatus } from './services/jobQueue.js';
 import { startSnapshotChecker, stopSnapshotChecker } from './services/snapshotChecker.js';
+import { recoverStuckJobs, startJobHealthChecker, stopJobHealthChecker } from './services/jobRecovery.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -80,9 +81,20 @@ startSnapshotChecker();
 // Initialize WebSocket server
 initWebSocket(httpServer, CORS_ORIGIN);
 
+// Recover any stuck jobs from previous runs
+recoverStuckJobs().then((recovered) => {
+  if (recovered > 0) {
+    console.log(`🔄 [Recovery] Recovered ${recovered} stuck jobs`);
+  }
+});
+
+// Start job health checker (runs every 5 minutes)
+startJobHealthChecker();
+
 // Graceful shutdown
 const shutdown = async () => {
   console.log('\n🛑 Shutting down gracefully...');
+  stopJobHealthChecker();
   stopSnapshotChecker();
   await closeJobQueues();
   await closeRedis();

@@ -1,7 +1,7 @@
 import { prisma } from '../db.js';
 import { emitToCompany } from '../websocket/wsServer.js';
 import { cache, CacheKeys, CacheTTL } from './cache.js';
-import { addScrapeProfileJob, isJobQueueAvailable } from './jobQueue.js';
+import { addScrapeProfileJob, addScrapePostsJob, isJobQueueAvailable } from './jobQueue.js';
 
 // Fallback imports for when job queue is not available
 import { brightdataQueue } from './brightdataQueue.js';
@@ -52,8 +52,7 @@ export const vaultService = {
               },
               orderBy: {
                 postedAt: 'desc'
-              },
-              take: 20 // Get last 20 posts for engagement calculation
+              }
             }
           }
         }
@@ -251,8 +250,7 @@ export const vaultService = {
               take: 1
             }
           },
-          orderBy: { postedAt: 'desc' },
-          take: 20
+          orderBy: { postedAt: 'desc' }
         }
       }
     });
@@ -293,6 +291,7 @@ export const vaultService = {
     const result = {
       id: competitor.id,
       name: competitor.name,
+      logoUrl: competitor.profilePictureUrl,
       description: competitor.description,
       industry: competitor.industry,
       platforms,
@@ -303,6 +302,110 @@ export const vaultService = {
     await cache.set(cacheKey, result, CacheTTL.competitorDetails);
 
     return result;
+  },
+
+  async refreshAllCompetitors(companyId: string) {
+    // 1. Check for in-progress scrape jobs
+    const inProgressJob = await prisma.scrapeJob.findFirst({
+      where: {
+        companyId,
+        status: { in: ['pending', 'in_progress'] }
+      }
+    });
+
+    if (inProgressJob) {
+      return { queued: 0, skipped: 0, inProgress: true };
+    }
+
+    // 2. Get all competitors
+    const relationships = await prisma.companyRelationship.findMany({
+      where: {
+        companyAId: companyId,
+        relationshipType: 'competitor'
+      },
+      include: {
+        companyB: {
+          include: {
+            platforms: {
+              include: {
+                platform: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // 3. Filter by 1-hour cooldown
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const eligible = relationships.filter(r =>
+      !r.lastScrapedAt || r.lastScrapedAt < oneHourAgo
+    );
+
+    // 4. Queue scrape jobs for eligible competitors
+    let queuedCount = 0;
+    for (const rel of eligible) {
+      const competitor = rel.companyB;
+      const linkedInPlatform = competitor.platforms.find(
+        p => p.platform.name === 'LinkedIn'
+      );
+
+      if (!linkedInPlatform) continue;
+
+      // Check if there's already a pending job for this target
+      const existingJob = await getPendingScrapeJobForTarget(companyId, competitor.id);
+      if (existingJob) continue;
+
+      // Create scrape job record in database
+      const scrapeJob = await createScrapeJob({
+        companyId,
+        targetId: competitor.id,
+        targetUrl: linkedInPlatform.profileUrl,
+        platform: 'LinkedIn',
+        scrapeType: 'posts',
+      });
+
+      // Determine URL type (company page or profile)
+      const urlType = (competitor.linkedInType === 'company' ? 'company' : 'profile') as 'company' | 'profile';
+
+      // Use BullMQ if available, otherwise fall back to legacy approach
+      if (isJobQueueAvailable()) {
+        console.log(`📋 [RefreshAll] Queuing BullMQ job for: ${competitor.name}`);
+        await addScrapePostsJob({
+          companyId,
+          targetId: competitor.id,
+          targetName: competitor.name,
+          targetUrl: linkedInPlatform.profileUrl,
+          platform: 'LinkedIn',
+          scrapeType: urlType,
+          scrapeJobId: scrapeJob.id,
+        }, 2000 + (queuedCount * 3000)); // Stagger jobs by 3 seconds each
+      } else {
+        console.log(`⚠️ [RefreshAll] BullMQ unavailable, using legacy for: ${competitor.name}`);
+        setTimeout(() => {
+          triggerAsyncScrape(scrapeJob.id);
+        }, 2000 + (queuedCount * 3000));
+      }
+
+      // Update lastScrapedAt
+      await prisma.companyRelationship.update({
+        where: { id: rel.id },
+        data: { lastScrapedAt: new Date() }
+      });
+
+      queuedCount++;
+    }
+
+    // Invalidate cache
+    await cache.del(CacheKeys.competitors(companyId));
+
+    console.log(`✅ [RefreshAll] Queued ${queuedCount} jobs, skipped ${relationships.length - queuedCount} (cooldown or no LinkedIn)`);
+
+    return {
+      queued: queuedCount,
+      skipped: relationships.length - queuedCount,
+      inProgress: false
+    };
   },
 
   async deleteCompetitor(competitorId: string, companyId: string) {
