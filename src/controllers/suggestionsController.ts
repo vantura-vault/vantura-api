@@ -15,11 +15,9 @@ export const suggestionsController = {
         companyId,
         platform,
         objective,
-        contentAngle,
-        topicTags,
-        useDataChamber,
-        useYourTopPosts,
-        useCompetitorPosts,
+        customObjective,
+        prompt,
+        attachedDocuments,
       } = req.body;
 
       if (!companyId || !platform) {
@@ -30,27 +28,31 @@ export const suggestionsController = {
         return;
       }
 
+      // Determine the effective objective
+      const effectiveObjective = objective === 'other' && customObjective
+        ? customObjective
+        : (objective || 'engagement');
+
       // 1. Load platform rules
       const platformRules = loadPlatformRules(platform);
 
-      // 2. Fetch company context (if useDataChamber = true)
+      // 2. Fetch company context (Data Chamber - always included)
       let companyContext = '';
-      if (useDataChamber !== false) {
-        const company = await prisma.company.findUnique({
-          where: { id: companyId },
-          select: {
-            name: true,
-            industry: true,
-            description: true,
-            values: true,
-            brandVoice: true,
-            targetAudience: true,
-            contentPriorities: true,
-          },
-        });
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: {
+          name: true,
+          industry: true,
+          description: true,
+          values: true,
+          brandVoice: true,
+          targetAudience: true,
+          contentPriorities: true,
+        },
+      });
 
-        if (company) {
-          companyContext = `
+      if (company) {
+        companyContext = `
 COMPANY PROFILE:
 - Company: ${company.name}
 - Industry: ${company.industry || 'Not specified'}
@@ -63,138 +65,181 @@ COMPANY PROFILE:
 IMPORTANT: Generate content that is SPECIFIC to this company's industry and business. Do NOT generate generic content.
 Use this brand voice and values in all content you create.
 `;
-        }
       }
 
-      // 3. Fetch top-performing posts (if useYourTopPosts = true)
+      // 3. Fetch top-performing posts (top 5 by engagement rate from last 90 days)
       let topPostsContext = '';
       let topPostsCount = 0;
-      if (useYourTopPosts !== false) {
-        const ninetyDaysAgo = new Date();
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-        const topPosts = await prisma.post.findMany({
-          where: {
-            companyId,
-            platform: {
-              name: platform,
-            },
-            postedAt: { gte: ninetyDaysAgo },
+      const allRecentPosts = await prisma.post.findMany({
+        where: {
+          companyId,
+          platform: {
+            name: platform,
           },
-          include: {
-            analysis: true,
-          },
-          orderBy: {
-            analysis: {
-              engagement: 'desc',
-            },
-          },
-          take: 10,
-        });
+          postedAt: { gte: ninetyDaysAgo },
+        },
+        include: {
+          analysis: true,
+        },
+      });
 
-        topPostsCount = topPosts.length;
+      // Calculate engagement rate and sort by it, take top 5
+      const topPosts = allRecentPosts
+        .map(post => ({
+          ...post,
+          engagementRate: post.analysis?.impressions
+            ? (post.analysis.engagement / post.analysis.impressions) * 100
+            : 0,
+        }))
+        .sort((a, b) => b.engagementRate - a.engagementRate)
+        .slice(0, 5);
 
-        if (topPosts.length > 0) {
-          topPostsContext = `
-YOUR TOP-PERFORMING POSTS (last 90 days):
+      topPostsCount = topPosts.length;
+
+      if (topPosts.length > 0) {
+        topPostsContext = `
+YOUR TOP-PERFORMING POSTS (last 90 days, by engagement rate):
 
 ${topPosts.map((post, i) => `
 ${i + 1}. Posted ${post.postedAt.toLocaleDateString()}:
    ${post.captionText?.substring(0, 200)}...
-   Engagement: ${post.analysis?.engagement || 0} total interactions
+   Engagement Rate: ${post.engagementRate.toFixed(1)}% (${post.analysis?.engagement || 0} engagements / ${post.analysis?.impressions || 0} impressions)
    Topics: ${post.analysis?.topics?.join(', ') || 'N/A'}
 `).join('\n')}
 
 Learn from these patterns when creating new content.
 `;
-        }
       }
 
-      // 4. Fetch competitor insights (if useCompetitorPosts = true)
+      // 4. Fetch competitor insights (all competitors, top 2 posts by engagement rate per competitor)
       let competitorContext = '';
       let competitorCount = 0;
       let competitorNames: string[] = [];
       let competitorPostsCount = 0;
-      if (useCompetitorPosts !== false) {
-        const competitorRelations = await prisma.companyRelationship.findMany({
-          where: {
-            companyAId: companyId,
-            relationshipType: 'competitor',
-          },
-          include: {
-            companyB: {
-              include: {
-                posts: {
-                  where: {
-                    platform: {
-                      name: platform,
-                    },
+
+      const competitorRelations = await prisma.companyRelationship.findMany({
+        where: {
+          companyAId: companyId,
+          relationshipType: 'competitor',
+        },
+        include: {
+          companyB: {
+            include: {
+              posts: {
+                where: {
+                  platform: {
+                    name: platform,
                   },
-                  orderBy: { postedAt: 'desc' },
-                  take: 5,
-                  include: { analysis: true },
                 },
+                orderBy: { postedAt: 'desc' },
+                take: 5, // Get 5 most recent, then sort by engagement rate
+                include: { analysis: true },
               },
             },
           },
+        },
+      });
+
+      // Process competitor posts: for each competitor, sort their 5 recent posts by engagement rate and take top 2
+      const competitorsWithTopPosts = competitorRelations.map(rel => {
+        const postsWithRate = rel.companyB.posts.map(p => ({
+          ...p,
+          engagementRate: p.analysis?.impressions
+            ? (p.analysis.engagement / p.analysis.impressions) * 100
+            : 0,
+        }));
+        const topPosts = postsWithRate
+          .sort((a, b) => b.engagementRate - a.engagementRate)
+          .slice(0, 2);
+        return {
+          name: rel.companyB.name,
+          posts: topPosts,
+        };
+      });
+
+      competitorCount = competitorRelations.length;
+      competitorNames = competitorsWithTopPosts.map(c => c.name);
+      competitorPostsCount = competitorsWithTopPosts.reduce((sum, c) => sum + c.posts.length, 0);
+
+      // Log detailed competitor info
+      console.log('📊 Competitor Intelligence Found:');
+      competitorsWithTopPosts.forEach(comp => {
+        console.log(`  - ${comp.name}: ${comp.posts.length} top posts (by engagement rate)`);
+        comp.posts.forEach(p => {
+          console.log(`      Post: ${p.captionText?.substring(0, 50)}... (${p.engagementRate.toFixed(1)}% engagement rate)`);
         });
+      });
 
-        const competitorBlueprints = await prisma.blueprint.findMany({
-          where: {
-            companyId: { not: companyId },
-            platform,
-          },
-          orderBy: { vanturaScore: 'desc' },
-          take: 5,
-        });
-
-        competitorCount = competitorRelations.length;
-        competitorNames = competitorRelations.map(rel => rel.companyB.name);
-        competitorPostsCount = competitorRelations.reduce((sum, rel) => sum + rel.companyB.posts.length, 0);
-
-        // Log detailed competitor info
-        console.log('📊 Competitor Intelligence Found:');
-        competitorRelations.forEach(rel => {
-          console.log(`  - ${rel.companyB.name}: ${rel.companyB.posts.length} posts`);
-          rel.companyB.posts.forEach(p => {
-            console.log(`      Post: ${p.captionText?.substring(0, 50)}... (${p.analysis?.engagement || 0} engagement)`);
-          });
-        });
-
-        if (competitorRelations.length > 0 || competitorBlueprints.length > 0) {
-          competitorContext = `
+      if (competitorsWithTopPosts.length > 0) {
+        competitorContext = `
 COMPETITOR INTELLIGENCE:
 
-${competitorRelations.map((rel) => `
-Competitor: ${rel.companyB.name}
-${rel.companyB.posts.length > 0 ? `Recent ${platform} posts:
-${rel.companyB.posts.map(p => {
-  const engRate = p.analysis?.impressions ? ((p.analysis.engagement / p.analysis.impressions) * 100).toFixed(1) + '%' : 'N/A';
-  return `  - "${p.captionText?.substring(0, 150)}..." (${p.analysis?.engagement || 0} total engagement, ${engRate} rate)`;
+${competitorsWithTopPosts.map((comp) => `
+Competitor: ${comp.name}
+${comp.posts.length > 0 ? `Top ${platform} posts (by engagement rate):
+${comp.posts.map(p => {
+  return `  - "${p.captionText?.substring(0, 150)}..." (${p.engagementRate.toFixed(1)}% engagement rate, ${p.analysis?.engagement || 0} total engagements)`;
 }).join('\n')}` : 'No recent posts found for this competitor.'}
 `).join('\n')}
 
-${competitorBlueprints.length > 0 ? `
-High-Performing Competitor Blueprints:
-${competitorBlueprints.map((bp, i) => `
-${i + 1}. ${bp.title} (Score: ${bp.vanturaScore}/100)
-   Hook: ${bp.hook.substring(0, 80)}...
-   Topics: ${bp.topicTags.join(', ')}
-`).join('\n')}
-` : ''}
-
 Use this competitor intelligence to find gaps and opportunities. Reference specific competitors by name in dataSources.
 `;
+      }
+
+      // 5. Fetch attached documents (if any)
+      let documentsContext = '';
+      let attachedDocsCount = 0;
+      if (attachedDocuments && Array.isArray(attachedDocuments) && attachedDocuments.length > 0) {
+        const fileIds = attachedDocuments.map((doc: { fileId: string }) => doc.fileId).filter(Boolean);
+
+        if (fileIds.length > 0) {
+          const files = await prisma.companyFile.findMany({
+            where: {
+              id: { in: fileIds },
+              companyId, // Ensure files belong to this company
+            },
+          });
+
+          const fileMap = new Map(files.map(f => [f.id, f]));
+
+          const docsWithInfo = attachedDocuments
+            .filter((doc: { fileId: string; description: string }) => fileMap.has(doc.fileId))
+            .map((doc: { fileId: string; description: string }) => {
+              const file = fileMap.get(doc.fileId)!;
+              return {
+                name: file.originalName,
+                mimeType: file.mimeType,
+                description: doc.description,
+              };
+            });
+
+          attachedDocsCount = docsWithInfo.length;
+
+          if (docsWithInfo.length > 0) {
+            documentsContext = `
+SUPPORTING DOCUMENTS PROVIDED BY USER:
+
+${docsWithInfo.map((doc, i) => `
+Document ${i + 1}: ${doc.name} (${doc.mimeType})
+User's Purpose: "${doc.description}"
+`).join('\n')}
+
+Use these documents and the user's stated purpose for each when creating content.
+`;
+          }
         }
       }
 
-      // 5. Build system prompt with platform rules
+      // 6. Build system prompt with platform rules
       const SYSTEM_PROMPT = `You are an expert ${platform} content strategist.
 
 PLATFORM RULES FOR ${platform}:
 ${JSON.stringify(platformRules, null, 2)}
 
-Your task: Create a comprehensive content blueprint optimized for ${objective || 'engagement'} with a ${contentAngle || 'balanced'} angle.
+Your task: Create a comprehensive content blueprint optimized for ${effectiveObjective}.
 
 Return ONLY valid JSON (no markdown) with this structure:
 {
@@ -245,11 +290,7 @@ CRITICAL REQUIREMENTS:
 - Hook must follow platform rules exactly
 - Use company's brand voice strictly
 - Learn from their top posts
-${contentAngle === 'data-driven' ? '- Focus on stats, research, numbers' : ''}
-${contentAngle === 'storytelling' ? '- Focus on personal narratives and stories' : ''}
-${contentAngle === 'educational' ? '- Focus on how-to and actionable tutorials' : ''}
-${contentAngle === 'thought-leadership' ? '- Focus on insights and opinions' : ''}
-${contentAngle === 'behind-the-scenes' ? '- Focus on process and transparency' : ''}
+- Follow the user's brief closely - they know what they want to post about
 
 COMPETITOR ANALYSIS INSTRUCTIONS (VERY IMPORTANT):
 - You MUST analyze the competitor posts provided in the COMPETITOR INTELLIGENCE section
@@ -261,18 +302,20 @@ COMPETITOR ANALYSIS INSTRUCTIONS (VERY IMPORTANT):
 - Do NOT generate generic content about "70% of startups" unless that's specifically relevant to the company's niche
 `;
 
-      // 6. Combine all context
+      // 7. Combine all context
       const fullContext = `${companyContext}
 ${topPostsContext}
 ${competitorContext}
+${documentsContext}
 
 USER REQUEST:
 - Platform: ${platform}
-- Objective: ${objective || 'engagement'}
-- Content Angle: ${contentAngle || 'balanced'}
-- Topics: ${topicTags?.join(', ') || 'general'}
+- Objective: ${effectiveObjective}
 
-Create content for these topics with the specified angle and objective.
+USER'S POST BRIEF:
+${prompt || 'Create engaging content for this platform.'}
+
+Create content based on the user's brief above.
 `;
 
       // 📋 LOG THE COMPLETE PROMPT TO CONSOLE
@@ -289,19 +332,16 @@ Create content for these topics with the specified angle and objective.
       console.log('-'.repeat(80));
       console.log(`Company ID: ${companyId}`);
       console.log(`Platform: ${platform}`);
-      console.log(`Objective: ${objective || 'engagement'}`);
-      console.log(`Content Angle: ${contentAngle || 'balanced'}`);
-      console.log(`Topics: ${topicTags?.join(', ') || 'general'}`);
-      console.log(`Data Chamber: ${useDataChamber !== false ? 'ON' : 'OFF'}`);
-      console.log(`Top Posts: ${useYourTopPosts !== false ? 'ON' : 'OFF'}`);
-      console.log(`Competitor Posts: ${useCompetitorPosts !== false ? 'ON' : 'OFF'}`);
+      console.log(`Objective: ${effectiveObjective}`);
+      console.log(`User Brief: ${prompt?.substring(0, 100) || 'None'}${prompt && prompt.length > 100 ? '...' : ''}`);
       console.log(`Top Posts Found: ${topPostsCount}`);
       console.log(`Competitors Analyzed: ${competitorCount}`);
       console.log(`Competitor Names: ${competitorNames.length > 0 ? competitorNames.join(', ') : 'None'}`);
       console.log(`Total Competitor Posts: ${competitorPostsCount}`);
+      console.log(`Attached Documents: ${attachedDocsCount}`);
       console.log('='.repeat(80) + '\n');
 
-      // 7. Call OpenAI for blueprint
+      // 8. Call OpenAI for blueprint
       const completion = await openai.chat.completions.create({
         model: process.env.LLM_MODEL || 'gpt-4o-mini',
         messages: [
@@ -377,12 +417,12 @@ Return: {
           meta: {
             brief: {
               platform,
-              objective: objective || 'engagement',
-              topicTags: topicTags || [],
-              contentAngle: contentAngle || 'balanced',
+              objective: effectiveObjective,
+              prompt: prompt || '',
             },
             examplesUsed: topPostsCount,
             competitorAngles: competitorCount,
+            attachedDocsCount,
           },
         },
       });
