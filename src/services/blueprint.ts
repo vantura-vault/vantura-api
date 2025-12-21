@@ -2,6 +2,23 @@ import { prisma } from '../db.js';
 
 export type ActionType = 'post' | 'comment' | 'repost' | 'story' | 'video';
 
+// Content Guidance Types (Process-based blueprint)
+export interface ContentFramework {
+  structure: string;          // "Hook → Story → Data → Insight → CTA"
+  toneGuidance: string[];     // ["Confident but not boastful", ...]
+}
+
+export interface WhatToIncludeItem {
+  label: string;              // "Hook", "Story", "Data", etc.
+  guidance: string;           // Semi-specific instruction
+  competitorInsight?: string; // Why this works
+}
+
+export interface WhatNotToDoItem {
+  antiPattern: string;        // What to avoid
+  reason: string;             // Why it hurts engagement
+}
+
 export interface CreateBlueprintInput {
   companyId: string;
   title: string;
@@ -34,6 +51,10 @@ export interface CreateBlueprintInput {
   estimatedEngagementMin?: number;
   estimatedEngagementMax?: number;
   optimizationNote?: string;
+  // Content Guidance (Process-based blueprint)
+  contentFramework?: ContentFramework;
+  whatToInclude?: WhatToIncludeItem[];
+  whatNotToDo?: WhatNotToDoItem[];
 }
 
 export async function createBlueprint(input: CreateBlueprintInput) {
@@ -70,6 +91,10 @@ export async function createBlueprint(input: CreateBlueprintInput) {
       estimatedEngagementMin: input.estimatedEngagementMin,
       estimatedEngagementMax: input.estimatedEngagementMax,
       optimizationNote: input.optimizationNote,
+      // Content Guidance (Process-based blueprint) - cast to JSON-compatible types
+      contentFramework: input.contentFramework as any,
+      whatToInclude: input.whatToInclude as any,
+      whatNotToDo: input.whatNotToDo as any,
     },
   });
 

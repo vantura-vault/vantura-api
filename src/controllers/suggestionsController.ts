@@ -233,73 +233,115 @@ Use these documents and the user's stated purpose for each when creating content
         }
       }
 
-      // 6. Build system prompt with platform rules
-      const SYSTEM_PROMPT = `You are an expert ${platform} content strategist.
+      // 6. Build system prompt with platform rules - PROCESS-BASED BLUEPRINT
+      const SYSTEM_PROMPT = `You are an expert ${platform} content strategist creating a BLUEPRINT.
+
+IMPORTANT: You are NOT writing a finished post. You are creating a GUIDE that tells the user:
+- HOW to structure their post
+- WHAT elements to include (semi-specifically, not generic)
+- WHY certain approaches work (based on competitor success)
+- What to AVOID (anti-patterns)
 
 PLATFORM RULES FOR ${platform}:
 ${JSON.stringify(platformRules, null, 2)}
 
-Your task: Create a comprehensive content blueprint optimized for ${effectiveObjective}.
+Your task: Create a strategic content blueprint that GUIDES the user to create their own post optimized for ${effectiveObjective}.
 
 Return ONLY valid JSON (no markdown) with this structure:
 {
-  "title": "string - descriptive title like 'Engaging LinkedIn Thought Leadership Post'",
+  "title": "string - descriptive title like 'Growth Story Blueprint for LinkedIn'",
   "actionType": "post | comment | repost | story | video - the type of content action",
-  "reasoning": "string - 2-3 sentences explaining WHY this blueprint will work based on platform rules, company context, and competitor analysis",
-  "visualDescription": "string - describe the visual format with slide breakdown if carousel",
-  "references": [
+  "reasoning": "string - 2-3 sentences explaining WHY this blueprint approach works based on competitor analysis",
+
+  "contentFramework": {
+    "structure": "string - describe the flow like 'Hook → Story → Data → Insight → CTA'",
+    "toneGuidance": ["array of 3 tone guidelines like 'Confident but not boastful'"]
+  },
+
+  "whatToInclude": [
     {
-      "name": "string - industry leader name who inspired this style",
-      "handle": "string - their LinkedIn/social handle if known",
-      "reason": "string - why this reference is relevant (e.g., 'Hook pattern', 'Storytelling style')"
+      "label": "Hook",
+      "guidance": "Semi-specific instruction on how to write the hook (e.g., 'Start with your most surprising metric from Q4')",
+      "competitorInsight": "Why this works based on competitor data (e.g., 'Competitors see 2.3x engagement with number hooks')"
+    },
+    {
+      "label": "Story/Context",
+      "guidance": "What story element to include (e.g., 'Share the specific challenge you faced before finding the solution')",
+      "competitorInsight": "Why this works"
+    },
+    {
+      "label": "Data/Proof",
+      "guidance": "What data to include (e.g., 'Include your growth percentage or time saved')",
+      "competitorInsight": "Why this works"
+    },
+    {
+      "label": "Insight/Lesson",
+      "guidance": "What lesson to share (e.g., 'Share the non-obvious takeaway others missed')",
+      "competitorInsight": "Why this works"
+    },
+    {
+      "label": "CTA",
+      "guidance": "What CTA style to use (e.g., 'End with an open question that invites discussion')",
+      "competitorInsight": "Why this works"
     }
   ],
-  "hook": "string - the opening attention-grabbing line",
-  "context": "string - the main body content with @mentions where relevant",
-  "hashtags": [{"tag": "string WITHOUT # prefix (e.g., 'B2BSaaS' not '#B2BSaaS')", "engagement": "string like '4.2% Eng.'"}],
-  "mentions": [{"handle": "string WITHOUT @ prefix (e.g., 'johndoe' not '@johndoe')", "engagement": "string like '5.1% Eng.'"}],
+
+  "whatNotToDo": [
+    {
+      "antiPattern": "What to avoid (e.g., 'Starting with generic motivational statements')",
+      "reason": "Why it hurts engagement (e.g., 'Gets scrolled past 3x faster than specific hooks')"
+    },
+    {
+      "antiPattern": "Second thing to avoid",
+      "reason": "Why it hurts engagement"
+    },
+    {
+      "antiPattern": "Third thing to avoid",
+      "reason": "Why it hurts engagement"
+    }
+  ],
+
+  "visualDescription": "string - describe the visual format recommendation",
+  "references": [
+    {
+      "name": "Industry leader name whose process inspired this blueprint",
+      "handle": "Their social handle if known",
+      "reason": "Why this reference is relevant (e.g., 'Hook pattern', 'Storytelling approach')"
+    }
+  ],
+  "hook": "string - GUIDANCE on hook approach (e.g., 'Lead with your most surprising outcome')",
+  "context": "string - GUIDANCE on main body (e.g., 'Share the journey from problem to solution')",
+  "hashtags": [{"tag": "string WITHOUT # prefix", "engagement": "string like '4.2% Eng.'"}],
+  "mentions": [{"handle": "string WITHOUT @ prefix", "engagement": "string like '5.1% Eng.'"}],
   "bestTimeToPost": "string like 'Tuesdays, 10 AM PST'",
-  "recommendedFormat": "string like 'Carousel Post (Image + Text)'",
-  "postingInsight": "string - why this format drives engagement",
-  "vanturaScore": "number 0-100 representing overall post quality score",
-  "estimatedReachMin": "number - minimum estimated impressions (e.g., 500)",
-  "estimatedReachMax": "number - maximum estimated impressions (e.g., 2000)",
-  "estimatedEngagementMin": "number - minimum engagement rate as percentage (REALISTIC: 1-5%, e.g., 2)",
-  "estimatedEngagementMax": "number - maximum engagement rate as percentage (REALISTIC: 3-10%, e.g., 6)",
-  "dataSources": ["array of SPECIFIC sources used - include competitor names if competitor data was provided"],
+  "recommendedFormat": "string like 'Text only' or 'Image + Text' or 'Carousel'",
+  "postingInsight": "string - key insight about posting strategy",
+  "estimatedReachMin": "number - minimum estimated impressions",
+  "estimatedReachMax": "number - maximum estimated impressions",
+  "estimatedEngagementMin": "number - minimum engagement rate % (REALISTIC: 1-5%)",
+  "estimatedEngagementMax": "number - maximum engagement rate % (REALISTIC: 3-10%)",
+  "dataSources": ["array of SPECIFIC sources - include competitor names if provided"],
   "timeWindow": "string like 'Last 30 Days'",
   "confidence": "number 0-100 representing confidence in predictions",
-  "yourPerformanceScore": "number 0-100 based on your historical post performance",
-  "competitorScore": "number 0-100 based on competitor performance data",
-  "optimizationNote": "string like 'This blueprint is optimized for high visibility and audience interaction.'"
+  "yourPerformanceScore": "number 0-100 based on historical performance",
+  "competitorScore": "number 0-100 based on competitor data",
+  "optimizationNote": "string - key optimization recommendation"
 }
 
-CRITICAL VALUE CONSTRAINTS:
-- estimatedEngagementMin/Max: MUST be realistic (1-10% range). LinkedIn average is 2-4%.
-- confidence: Return as 0-100, NOT as a decimal (e.g., 85 not 0.85)
-- hashtags.tag: Do NOT include the # symbol
-- mentions.handle: Do NOT include the @ symbol
-- dataSources: Be SPECIFIC - list actual competitor names, "Your Top Posts", "Brand Voice Profile" etc.
+CRITICAL BLUEPRINT GUIDELINES:
+1. whatToInclude guidance should be SEMI-SPECIFIC, not generic
+   - BAD: "Include a data point"
+   - GOOD: "Include your Q4 growth percentage or the time saved by using your solution"
+2. whatNotToDo should include REAL anti-patterns based on what fails for competitors
+3. contentFramework.toneGuidance should be actionable (e.g., "Be confident but not boastful")
+4. All competitorInsight fields should reference WHY things work based on data
+5. hook and context fields should be GUIDANCE, not actual post text
 
-IMPORTANT:
-- Include exactly 3 references (industry leaders whose style inspired the content)
-- actionType should match the content format (usually "post" for LinkedIn)
-
-CRITICAL REQUIREMENTS:
-- Variants should have LOW randomness - keep them very similar
-- Hook must follow platform rules exactly
-- Use company's brand voice strictly
-- Learn from their top posts
-- Follow the user's brief closely - they know what they want to post about
-
-COMPETITOR ANALYSIS INSTRUCTIONS (VERY IMPORTANT):
-- You MUST analyze the competitor posts provided in the COMPETITOR INTELLIGENCE section
-- Study what topics, angles, and messaging styles competitors are using
-- Identify gaps: What are competitors NOT talking about that would resonate with the target audience?
-- Create content that differentiates from competitors while addressing similar market interests
-- If competitors are in prediction markets (like Kalshi, Polymarket), consider how to position the company's unique value
-- The generated content should be RELEVANT to the company's industry and competitors - NOT generic SaaS advice
-- Do NOT generate generic content about "70% of startups" unless that's specifically relevant to the company's niche
+COMPETITOR ANALYSIS INSTRUCTIONS:
+- Study competitor posts to understand what WORKS and what DOESN'T
+- Use this to inform your whatToInclude competitorInsights
+- Identify anti-patterns from what competitors avoid or what gets low engagement
+- Reference specific competitors in dataSources when their data informed your guidance
 `;
 
       // 7. Combine all context
@@ -341,7 +383,7 @@ Create content based on the user's brief above.
       console.log(`Attached Documents: ${attachedDocsCount}`);
       console.log('='.repeat(80) + '\n');
 
-      // 8. Call OpenAI for blueprint
+      // 8. Call OpenAI for single process-based blueprint
       const completion = await openai.chat.completions.create({
         model: process.env.LLM_MODEL || 'gpt-4o-mini',
         messages: [
@@ -349,70 +391,29 @@ Create content based on the user's brief above.
           { role: 'user', content: fullContext },
         ],
         response_format: { type: 'json_object' },
-        temperature: 0.7, // Moderate temperature for variety while maintaining quality
-        max_tokens: 2500,
+        temperature: 0.7,
+        max_tokens: 3000, // Increased for larger blueprint with guidance sections
       });
 
       const blueprint = JSON.parse(completion.choices[0].message.content || '{}');
 
-      // 8. Generate 3 similar variants (ask LLM for minor variations)
-      const variantsCompletion = await openai.chat.completions.create({
-        model: process.env.LLM_MODEL || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You create post variations with noticeable differences while keeping the core message. Return JSON with variants array containing objects with "text" and "reasoning" fields.',
-          },
-          {
-            role: 'user',
-            content: `Create 3 DIFFERENT variations of this post. Change wording, vary the hook style, adjust emphasis, but keep the core data and message:
+      // Add metadata to blueprint
+      blueprint.companyId = companyId;
+      blueprint.platform = platform;
+      blueprint.objective = effectiveObjective;
+      blueprint.topicTags = prompt ? [prompt.substring(0, 50)] : [];
 
-Hook: ${blueprint.hook}
-Context: ${blueprint.context}
+      // 📋 LOG THE GENERATED BLUEPRINT
+      console.log('\n' + '='.repeat(80));
+      console.log('📋 GENERATED BLUEPRINT');
+      console.log('='.repeat(80));
+      console.log(JSON.stringify(blueprint, null, 2));
+      console.log('='.repeat(80) + '\n');
 
-For each variant, provide:
-1. The full post text
-2. A brief reasoning (1-2 sentences) explaining WHY this specific variant will work based on its hook style, tone, and platform best practices.
-
-Return: {
-  "variants": [
-    {"text": "variant 1 text", "reasoning": "This variant works because..."},
-    {"text": "variant 2 text", "reasoning": "This variant works because..."},
-    {"text": "variant 3 text", "reasoning": "This variant works because..."}
-  ]
-}`,
-          },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-        max_tokens: 1500,
-      });
-
-      const variantsData = JSON.parse(variantsCompletion.choices[0].message.content || '{"variants":[]}');
-      const variants = (variantsData.variants || []).map((variant: { text: string; reasoning: string }) => {
-        // Add slight variation to scores (±3 points from base)
-        const baseScore = blueprint.vanturaScore || 85;
-        const variation = (Math.random() - 0.5) * 6; // Random between -3 and +3
-        const finalScore = Math.max(0, Math.min(100, baseScore + variation));
-
-        // Analytics and critic scores with their own slight variations
-        const analyticsScore = Math.max(0, Math.min(100, finalScore * (0.88 + Math.random() * 0.04))); // 88-92% of final
-        const criticScore = Math.max(0, Math.min(100, finalScore * (0.83 + Math.random() * 0.04))); // 83-87% of final
-
-        return {
-          text: variant.text,
-          reasoning: variant.reasoning,
-          analyticsScore: Math.round(analyticsScore * 100) / 100,
-          criticScore: Math.round(criticScore * 100) / 100,
-          finalScore: Math.round(finalScore * 100) / 100,
-        };
-      });
-
-      // Return response
+      // Return response - single blueprint, no variants
       res.json({
         success: true,
         data: {
-          variants,
           blueprint,
           meta: {
             brief: {

@@ -12,6 +12,7 @@ import suggestionsRoutes from './routes/suggestions.js';
 import dataChamberRoutes from './routes/dataChamber.js';
 import blueprintRoutes from './routes/blueprint.js';
 import fileRoutes from './routes/files.js';
+import draftRoutes from './routes/draft.js';
 import { initWebSocket } from './websocket/wsServer.js';
 import { initRedis, closeRedis, cache } from './services/cache.js';
 import { initJobQueues, startWorkers, closeJobQueues, getQueueStatus } from './services/jobQueue.js';
@@ -42,6 +43,7 @@ app.use('/api/suggestions', suggestionsRoutes);
 app.use('/api/data-chamber', dataChamberRoutes);
 app.use('/api/blueprints', blueprintRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/drafts', draftRoutes);
 
 app.get('/', (_req, res) => {
   res.json({

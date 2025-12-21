@@ -77,6 +77,7 @@ model Company {
   initiatedScrapeJobs ScrapeJob[] @relation("InitiatedJobs")
   targetedScrapeJobs  ScrapeJob[] @relation("TargetedJobs")
   files             CompanyFile[]
+  drafts            PostDraft[]
 
   @@map("companies")
 }
@@ -301,17 +302,56 @@ model Blueprint {
   estimatedEngagementMax Float?  // e.g., 1.8 (percentage)
   optimizationNote      String?  @db.Text // e.g., "optimized for high visibility"
 
+  // Content Guidance (Process-based blueprint)
+  contentFramework      Json?    // {structure: string, toneGuidance: string[]}
+  whatToInclude         Json?    // Array of {label: string, guidance: string, competitorInsight?: string}
+  whatNotToDo           Json?    // Array of {antiPattern: string, reason: string}
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  drafts  PostDraft[]
 
   @@index([companyId])
   @@index([platform])
   @@index([actionType])
   @@index([createdAt])
   @@map("blueprints")
+}
+
+// ============================================
+// POST DRAFTS - User-Created Posts in Progress
+// ============================================
+
+model PostDraft {
+  id            String   @id @default(cuid())
+  companyId     String
+  blueprintId   String
+
+  // Content
+  platform      String   // "LinkedIn", "Twitter", etc.
+  imageUrl      String?  // Uploaded image URL (null for text-only)
+  caption       String?  @db.Text // User's written caption
+  selectedHashtags String[] // Hashtags user selected to include
+
+  // Wizard State
+  currentStep   Int      @default(1) // 1=Overview, 2=Visual, 3=Caption, 4=Upload
+  status        String   @default("in_progress") // "in_progress" | "ready_to_publish"
+
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  blueprint Blueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([blueprintId])
+  @@index([status])
+  @@map("post_drafts")
 }
 
 // ============================================
