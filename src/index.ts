@@ -13,11 +13,14 @@ import dataChamberRoutes from './routes/dataChamber.js';
 import blueprintRoutes from './routes/blueprint.js';
 import fileRoutes from './routes/files.js';
 import draftRoutes from './routes/draft.js';
+import adminRoutes from './routes/admin.js';
+import webhookRoutes from './routes/webhook.js';
 import { initWebSocket } from './websocket/wsServer.js';
 import { initRedis, closeRedis, cache } from './services/cache.js';
 import { initJobQueues, startWorkers, closeJobQueues, getQueueStatus } from './services/jobQueue.js';
 import { startSnapshotChecker, stopSnapshotChecker } from './services/snapshotChecker.js';
 import { recoverStuckJobs, startJobHealthChecker, stopJobHealthChecker } from './services/jobRecovery.js';
+import { apiLogger } from './middleware/apiLogger.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,7 +32,14 @@ app.use(cors({
   origin: CORS_ORIGIN,
   credentials: true,
 }));
+
+// Webhook routes need raw body (must be before express.json())
+app.use('/webhooks', webhookRoutes);
+
 app.use(express.json());
+
+// API usage logger (must be after json parser, before routes)
+app.use(apiLogger);
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -44,6 +54,7 @@ app.use('/api/data-chamber', dataChamberRoutes);
 app.use('/api/blueprints', blueprintRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/drafts', draftRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/', (_req, res) => {
   res.json({

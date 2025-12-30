@@ -66,6 +66,14 @@ model Company {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  // Stripe billing
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?
+  subscriptionStatus   String?   // "active", "trialing", "canceled", "past_due"
+  subscriptionPlan     String?   // "free", "starter", "pro", "enterprise"
+  trialEndsAt          DateTime?
+  currentPeriodEnd     DateTime?
+
   // Relations
   users             User[]
   platforms         CompanyPlatform[]
@@ -437,4 +445,27 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================
+// API USAGE TRACKING
+// ============================================
+
+model ApiUsageLog {
+  id           String   @id @default(cuid())
+  endpoint     String   // e.g., "/api/vault/competitors"
+  method       String   // "GET", "POST", "PUT", "DELETE"
+  userId       String?  // Null for unauthenticated requests
+  companyId    String?  // From req.user.companyId if available
+  statusCode   Int      // HTTP response status code
+  responseTime Int      // Response time in milliseconds
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([endpoint])
+  @@index([createdAt])
+  @@map("api_usage_logs")
 }

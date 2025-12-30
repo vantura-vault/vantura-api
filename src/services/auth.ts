@@ -3,6 +3,7 @@ import { RegisterDTO, LoginDTO, AuthResponseDTO } from '../types/index.js';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { prewarmCacheAsync } from './cacheWarmer.js';
+import { config } from '../config/env.js';
 
 const SALT_ROUNDS = 12;
 
@@ -159,6 +160,19 @@ export const authService = {
       // Legacy user without password - for now, allow login
       // In production, you'd want to force a password reset
       console.warn(`[Auth] User ${user.email} has no password hash - allowing legacy login`);
+    }
+
+    // Auto-promote to super_admin if email is in SUPER_ADMIN_EMAILS
+    if (
+      config.superAdminEmails.includes(user.email.toLowerCase()) &&
+      user.role !== 'super_admin'
+    ) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { role: 'super_admin' },
+      });
+      user.role = 'super_admin';
+      console.log(`[Auth] Auto-promoted ${user.email} to super_admin`);
     }
 
     // Generate auth token
